@@ -1,191 +1,134 @@
-type StatusPillProps = { label: string; tone?: "green" | "amber" | "red" | "sage" };
-
-export function StatusPill({ label, tone = "sage" }: StatusPillProps) {
-  return <span className={`land-status land-status-${tone}`}>{label}</span>;
+function StatusPill({
+  children,
+  tone = "sage",
+}: {
+  children: React.ReactNode;
+  tone?: "sage" | "red" | "amber";
+}) {
+  return <span className={`land-status land-status-${tone}`}>{children}</span>;
 }
 
-export function DevicePreview() {
+export function HeroProductScene() {
   return (
-    <div className="land-device" aria-label="ARGUS wristband illustration">
-      <div className="land-device-body" aria-hidden="true">
-        <span className="land-device-face" />
-        <span className="land-device-sensor" />
-        <span className="land-device-button" />
-        <span className="land-device-strap land-device-strap-a" />
-        <span className="land-device-strap land-device-strap-b" />
+    <figure className="land-product-scene">
+      <div className="land-scene-label">Field demo · Static preview</div>
+      <div className="land-scene-landscape" aria-hidden="true">
+        <span className="land-scene-sun" />
+        <span className="land-scene-ridge land-scene-ridge-back" />
+        <span className="land-scene-ridge land-scene-ridge-front" />
+        <span className="land-scene-route land-scene-route-one" />
+        <span className="land-scene-route land-scene-route-two" />
+        <span className="land-scene-marker land-scene-marker-start" />
+        <span className="land-scene-marker land-scene-marker-end" />
       </div>
-      <div className="land-device-note">
-        <p className="land-mini-eyebrow">ESP32 · MAX30102</p>
-        <strong>ARGUS wristband</strong>
-        <div className="land-inline-status">
-          <StatusPill label="Live from MAX30102" tone="green" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
-export function PhonePreview() {
-  return (
-    <div className="land-phone" aria-label="Trekker portal on phone illustration">
-      <div className="land-phone-bar" aria-hidden="true" />
-      <div className="land-phone-head">
-        <div>
-          <p className="land-mini-eyebrow">Trekker portal · demo</p>
-          <strong>Welcome, Sarbagya</strong>
-        </div>
-        <StatusPill label="Monitoring" tone="green" />
+      <div className="land-hero-device" aria-hidden="true">
+        <span className="land-hero-strap land-hero-strap-top" />
+        <span className="land-hero-watch">
+          <small>DEMO</small>
+          <b>88</b>
+          <em>bpm</em>
+        </span>
+        <span className="land-hero-sos-button" />
+        <span className="land-hero-strap land-hero-strap-bottom" />
       </div>
-      <div className="land-phone-device">
-        <div>
-          <span className="land-mini-eyebrow">Assigned device</span>
-          <strong>ARGUS-ESP32-DEMO-01</strong>
-        </div>
-        <StatusPill label="BLE connected" tone="green" />
-      </div>
-      <div className="land-phone-map" aria-hidden="true">
-        <span className="land-map-peak land-map-peak-a" />
-        <span className="land-map-peak land-map-peak-b" />
-        <span className="land-map-peak land-map-peak-c" />
-        <span className="land-map-route" />
-        <span className="land-map-pin" />
-      </div>
-      <div className="land-phone-map-meta">
-        28.4572° N, 83.9546° E · ±10 m · 1 s ago
-      </div>
-      <div className="land-phone-vitals">
-        <div>
-          <span className="land-mini-eyebrow">Heart rate</span>
-          <strong className="land-vital-value">88 bpm</strong>
-        </div>
-        <div>
-          <span className="land-mini-eyebrow">SpO₂</span>
-          <strong className="land-vital-value">97%</strong>
-        </div>
-        <div>
-          <span className="land-mini-eyebrow">Sensor</span>
-          <strong className="land-vital-value">Live</strong>
-        </div>
-      </div>
-      <div className="land-phone-row">
-        <span>GPS accuracy</span>
-        <strong>±10 m</strong>
-      </div>
-      <div className="land-phone-ready">
-        <span aria-hidden="true" />
-        SOS ready
-      </div>
-    </div>
-  );
-}
 
-const flowStates = [
-  { label: "Created", tone: "green" as const },
-  { label: "Pending", tone: "amber" as const },
-  { label: "Accepted", tone: "amber" as const },
-  { label: "Sent", tone: "amber" as const },
-  { label: "Delivered", tone: "green" as const },
-];
+      <div className="land-hero-ble" aria-hidden="true"><span>BLE</span></div>
 
-export function EmergencyPreview() {
-  return (
-    <div className="land-emergency" aria-label="SOS event flow illustration">
-      <div className="land-emergency-head">
-        <div>
-          <p className="land-mini-eyebrow">SOS event · demo</p>
-          <strong>One record from wristband to rescue</strong>
-        </div>
-        <StatusPill label="Active" tone="red" />
-      </div>
-      <div className="land-emergency-snapshot">
-        <div>
-          <span className="land-mini-eyebrow">Heart rate</span>
-          <strong>88 bpm</strong>
-        </div>
-        <div>
-          <span className="land-mini-eyebrow">SpO₂</span>
-          <strong>97%</strong>
-        </div>
-        <div>
-          <span className="land-mini-eyebrow">GPS</span>
-          <strong>±10 m</strong>
-        </div>
-      </div>
-      <ol className="land-emergency-steps">
-        {flowStates.map((state) => (
-          <li key={state.label}>
-            <StatusPill label={state.label} tone={state.tone} />
-          </li>
-        ))}
-      </ol>
-      <div className="land-emergency-delivery">
-        <span aria-hidden="true" />
-        <div>
-          <strong>WhatsApp alert to trusted contacts</strong>
-          <p>Map + Rescue Passport · Meta Cloud API</p>
-        </div>
-        <StatusPill label="Accepted" tone="amber" />
-      </div>
-      <p className="land-illustrative-note">
-        Illustrative sequence · delivery shown only when provider confirms it
-      </p>
-    </div>
-  );
-}
-
-export function AuthorityPreview() {
-  return (
-    <div className="land-authority" aria-label="Authority portal preview">
-      <div className="land-authority-head">
-        <div>
-          <p className="land-mini-eyebrow">Authority / Rescue · demo</p>
-          <strong>Active emergencies</strong>
-        </div>
-        <StatusPill label="2 active" tone="red" />
-      </div>
-      <div className="land-authority-cards">
-        <div>
-          <span className="land-mini-eyebrow">SOS events</span>
-          <strong>2</strong>
-        </div>
-        <div>
-          <span className="land-mini-eyebrow">Devices online</span>
-          <strong>7</strong>
-        </div>
-        <div>
-          <span className="land-mini-eyebrow">Freshness</span>
-          <strong>1 s</strong>
-        </div>
-      </div>
-      <div className="land-authority-rows">
-        <div className="land-authority-row">
+      <div className="land-hero-phone">
+        <div className="land-phone-speaker" aria-hidden="true" />
+        <header>
           <div>
-            <strong>Sarbagya Acharya</strong>
-            <p>TRK-DEMO-001 · Mardi Himal Trek</p>
+            <span className="land-ui-label">Trekker Portal · Demo</span>
+            <strong>Maya&apos;s trail status</strong>
           </div>
-          <div className="land-authority-row-values">
-            <span><b>88</b> bpm</span>
-            <span><b>97</b> % SpO₂</span>
-            <span className="land-gps"></span>
-          </div>
-          <StatusPill label="Active" tone="red" />
+          <StatusPill>Connected</StatusPill>
+        </header>
+        <div className="land-phone-map" aria-hidden="true">
+          <span className="land-phone-contour" />
+          <span className="land-phone-route" />
+          <span className="land-phone-pin" />
+          <small>Mardi Himal route</small>
         </div>
-        <div className="land-authority-row">
-          <div>
-            <strong>Anisha Rai</strong>
-            <p>TRK-0142 · Annapurna Base Camp</p>
-          </div>
-          <div className="land-authority-row-values">
-            <span><b>92</b> bpm</span>
-            <span><b>95</b> % SpO₂</span>
-            <span className="land-gps"></span>
-          </div>
-          <StatusPill label="Acknowledged" tone="amber" />
+        <div className="land-phone-readings">
+          <div><span>Heart rate</span><strong>88 bpm</strong></div>
+          <div><span>SpO₂</span><strong>97%</strong></div>
+        </div>
+        <div className="land-phone-location"><span>Location</span><strong>±18 m · Demo</strong></div>
+        <div className="land-phone-status"><span>Context available</span><StatusPill tone="red">SOS ready</StatusPill></div>
+      </div>
+
+      <div className="land-hero-authority">
+        <div className="land-authority-windowbar" aria-hidden="true"><span /><span /><span /></div>
+        <span className="land-ui-label">Authority Portal · Demo</span>
+        <div className="land-authority-alert">
+          <span className="land-authority-avatar">MG</span>
+          <div><strong>Maya Gurung</strong><small>TRK-DEMO-001</small></div>
+          <StatusPill tone="red">Active SOS</StatusPill>
+        </div>
+        <div className="land-authority-context">
+          <span>Map ready</span><span>Passport ready</span>
         </div>
       </div>
-      <p className="land-illustrative-note">
-        Illustrative preview · same data the protected portal shows
-      </p>
-    </div>
+
+      <figcaption className="land-visually-hidden">
+        Demo composition showing the ARGUS wristband connected to the Trekker Portal,
+        route location, and Authority Portal.
+      </figcaption>
+    </figure>
+  );
+}
+
+export function RescueDashboardPreview() {
+  return (
+    <article className="land-rescue-dashboard" aria-labelledby="rescue-record-title">
+      <header className="land-dashboard-header">
+        <div className="land-dashboard-title">
+          <span className="land-record-label">Demo rescue record</span>
+          <h3 id="rescue-record-title">Maya Gurung</h3>
+          <p>TRK-DEMO-001 · Mardi Himal route</p>
+        </div>
+        <div className="land-dashboard-state">
+          <span>Event status</span>
+          <StatusPill tone="red">Active SOS</StatusPill>
+        </div>
+      </header>
+
+      <div className="land-dashboard-summary">
+        <div><span>Heart rate</span><strong>88 bpm</strong><small>Latest available</small></div>
+        <div><span>SpO₂</span><strong>97%</strong><small>Latest available</small></div>
+        <div><span>Reading freshness</span><strong>42 sec</strong><small>Before SOS</small></div>
+        <div><span>GPS accuracy</span><strong>±18 m</strong><small>Browser location</small></div>
+      </div>
+
+      <div className="land-dashboard-main">
+        <div className="land-dashboard-map">
+          <div className="land-dashboard-contours" aria-hidden="true" />
+          <span className="land-dashboard-route" aria-hidden="true" />
+          <span className="land-dashboard-pin" aria-hidden="true" />
+          <div className="land-map-caption">
+            <span>Last available location</span>
+            <strong>28.4572° N, 83.9546° E</strong>
+          </div>
+        </div>
+
+        <dl className="land-dashboard-details">
+          <div><dt>Symptom report</dt><dd>Headache and dizziness</dd></div>
+          <div><dt>SOS source</dt><dd>Physical wristband button</dd></div>
+          <div><dt>Event time</dt><dd>08:42 NPT</dd></div>
+          <div><dt>WhatsApp delivery</dt><dd><StatusPill tone="amber">Accepted by provider</StatusPill></dd></div>
+          <div><dt>Location</dt><dd>Browser location available</dd></div>
+          <div><dt>Altitude, when available</dt><dd>Unavailable in this demo</dd></div>
+        </dl>
+      </div>
+
+      <footer className="land-dashboard-footer">
+        <p>Static preview. No live or production records are shown.</p>
+        <div role="group" aria-label="Actions available in the real Authority Portal">
+          <span>Open map ↗</span>
+          <span>Open Rescue Passport ↗</span>
+        </div>
+      </footer>
+    </article>
   );
 }

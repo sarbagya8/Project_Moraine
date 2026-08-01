@@ -4,38 +4,21 @@ import { portalRoutes } from "@/content/landing";
 export function LandingFooter() {
   return (
     <footer className="land-footer">
-      <div className="land-footer-brand">
-        <Link href="#land-content" className="land-brand land-brand-on-dark">
-          <span aria-hidden="true" className="land-brand-mark">A</span>
-          ARGUS
+      <div className="land-footer-intro">
+        <Link className="land-brand land-brand-footer" href="/" aria-label="ARGUS home">
+          <span className="land-brand-mark" aria-hidden="true">A</span>
+          <span>ARGUS</span>
         </Link>
-        <p>
-          Connected safety context for trekkers and rescue teams. A hackathon
-          prototype, built honestly.
-        </p>
+        <p>A connected trekking-safety prototype for adventure tourism.</p>
       </div>
-      <div className="land-footer-column">
-        <strong>Explore</strong>
+      <nav aria-label="Footer navigation">
         <a href="#how-it-works">How it works</a>
-        <a href="#wristband">Wearable</a>
-        <a href="#emergency-flow">Emergency flow</a>
-        <a href="#rescue-view">Rescue view</a>
-      </div>
-      <div className="land-footer-column">
-        <strong>Portals</strong>
+        <a href="#demo">Demo</a>
+        <a href="#prototype">Prototype</a>
         <Link href={portalRoutes.trekker}>Trekker Portal</Link>
         <Link href={portalRoutes.authority}>Authority Portal</Link>
-        <a href="#limitations">Prototype considerations</a>
-        <a href="#about">About ARGUS</a>
-      </div>
-      <div className="land-footer-credit">
-        <p>
-          Hackathon project · Team ARGUS · {new Date().getFullYear()}
-        </p>
-        <p>
-          ESP32 · MAX30102 · BLE · phone GPS · Supabase · WhatsApp Cloud API
-        </p>
-      </div>
+      </nav>
+      <p className="land-footer-credit">Team ARGUS · {new Date().getFullYear()}</p>
     </footer>
   );
 }

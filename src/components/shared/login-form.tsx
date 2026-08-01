@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { portalRequest } from "@/lib/portal-api";
+import { useEffect, useRef, useState } from "react";
+import { PortalApiError, portalRequest } from "@/lib/portal-api";
 
 export function LoginForm({ kind }: { kind: "authority" | "trekker" }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const pendingRef = useRef(false);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   async function submit(formData: FormData) {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
     setPending(true);
     setError("");
     try {
@@ -35,8 +43,13 @@ export function LoginForm({ kind }: { kind: "authority" | "trekker" }) {
       }
       router.refresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Sign in failed.");
+      setError(
+        reason instanceof PortalApiError
+          ? reason.message
+          : "Could not reach the server. Check your connection and try again.",
+      );
     } finally {
+      pendingRef.current = false;
       setPending(false);
     }
   }
@@ -70,7 +83,17 @@ export function LoginForm({ kind }: { kind: "authority" | "trekker" }) {
               <input id="pairingCode" name="pairingCode" type="password" autoComplete="one-time-code" required />
             </>
           )}
-          {error ? <p className="form-error" role="alert">{error}</p> : null}
+          {error ? (
+            <p
+              ref={errorRef}
+              className="form-error"
+              role="status"
+              aria-live="polite"
+              tabIndex={-1}
+            >
+              {error}
+            </p>
+          ) : null}
           <button className="primary-button" type="submit" disabled={pending}>
             {pending ? "Signing in…" : "Sign in"}
           </button>

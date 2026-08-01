@@ -1,71 +1,48 @@
-import { demoSteps, flowLayers, type FlowLayer } from "@/content/landing";
-
-function LayerFlow({ layer }: { layer: FlowLayer }) {
-  return (
-    <div className={`land-flow-layer land-flow-${layer.id}`}>
-      <div className="land-flow-layer-head">
-        <strong>{layer.label}</strong>
-        <span>{layer.note}</span>
-      </div>
-      <div className="land-flow-nodes">
-        {layer.nodes.map((node, index) => (
-          <div className="land-flow-node" key={node.name}>
-            <span className="land-flow-arrow" aria-hidden="true" hidden={index === layer.nodes.length - 1}>
-              →
-            </span>
-            <strong>{node.name}</strong>
-            <small>{node.detail}</small>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { systemPhases } from "@/content/landing";
 
 export function SystemFlow() {
   return (
-    <section className="land-section land-flow-section" id="how-it-works">
-      <div className="land-section-intro">
-        <p className="land-eyebrow">How ARGUS works</p>
-        <h2>One connected safety context.</h2>
+    <section className="land-system" id="how-it-works" aria-labelledby="system-title">
+      <div className="land-section-heading">
+        <div>
+          <p className="land-eyebrow">How the parts connect</p>
+          <h2 id="system-title">One connected system from wristband to rescue.</h2>
+        </div>
         <p>
-          MAX30102 readings travel over BLE to the authenticated Trekker
-          Portal. The phone adds GPS, the backend validates every write, and
-          Supabase holds one shared emergency record for the Authority Portal.
+          Each layer adds context without hiding unavailable readings or delivery state.
         </p>
       </div>
-      <div className="land-flow-grid">
-        {flowLayers.map((layer) => (
-          <LayerFlow key={layer.id} layer={layer} />
+
+      <div className="land-system-phases" role="list" aria-label="ARGUS product system phases">
+        {systemPhases.map((phase, index) => (
+          <article className="land-system-phase" role="listitem" key={phase.label}>
+            <div className={`land-system-icon land-system-icon-${phase.visual}`} aria-hidden="true">
+              <span />
+            </div>
+            <span className="land-phase-number">0{index + 1}</span>
+            <h3>{phase.label}</h3>
+            <p>{phase.description}</p>
+            <div className="land-phase-nodes">
+              {phase.nodes.map((node) => <strong key={node}>{node}</strong>)}
+            </div>
+            <small>{phase.note}</small>
+          </article>
         ))}
       </div>
-      <div className="land-internet-note">
-        <strong>Internet boundary</strong>
-        <p>
-          The nearby wristband link uses Bluetooth Low Energy and needs no
-          internet. Internet is required between the phone and the Next.js
-          backend, Supabase, and WhatsApp cloud services.
-        </p>
-      </div>
-      <div className="land-stepper">
-        <div className="land-section-intro">
-          <p className="land-eyebrow">Guided demo sequence</p>
-          <h2>Six steps from wristband to response.</h2>
-        </div>
-        <ol className="land-steps">
-          {demoSteps.map((step, index) => (
-            <li key={step.title}>
-              <span className="land-step-number">{index + 1}</span>
-              <strong>{step.title}</strong>
-              <p>{step.detail}</p>
-            </li>
-          ))}
-        </ol>
-        <p className="land-demo-note">
-          Interface previews in this section are illustrative. Delivery status
-          is reported only after the real backend and provider confirm it.
-        </p>
-      </div>
+
+      <ol className="land-data-route" aria-label="Complete data route">
+        {[
+          "MAX30102",
+          "ESP32 wristband",
+          "BLE",
+          "Trekker Portal",
+          "Location + symptoms",
+          "Authenticated backend",
+          "Supabase",
+          "Authority Portal",
+          "WhatsApp alert",
+        ].map((node) => <li key={node}>{node}</li>)}
+      </ol>
     </section>
   );
 }

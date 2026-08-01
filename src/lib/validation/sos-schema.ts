@@ -1,0 +1,31 @@
+import { z } from "zod";
+import { locationSchema } from "./location-schema";
+import { readingSchema } from "./reading-schema";
+import { trekkerId } from "./shared-schema";
+import { symptoms } from "./symptom-schema";
+
+export const sosSources = [
+  "physical_button",
+  "web_button",
+  "manual",
+  "demo",
+] as const;
+
+export const sosSchema = z
+  .object({
+    trekkerId,
+    deviceId: z.string().trim().min(1).max(100).optional(),
+    source: z.enum(sosSources),
+    symptom: z.enum(symptoms).optional(),
+    reading: readingSchema.omit({ trekkerId: true }).optional(),
+    location: locationSchema
+      .omit({ trekkerId: true, source: true })
+      .optional(),
+  })
+  .strict();
+
+export const updateSosStatusSchema = z
+  .object({
+    status: z.enum(["active", "acknowledged", "resolved"]),
+  })
+  .strict();

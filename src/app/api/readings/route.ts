@@ -1,0 +1,113 @@
+import { failure, readJson, success, validationFailure } from "@/lib/api-response";
+import { isDeviceAuthorized } from "@/lib/api-auth";
+import { SENSOR_DISCLAIMER } from "@/lib/disclaimer";
+import { env } from "@/lib/env";
+import {
+  idempotencyKey,
+  isUniqueViolation,
+  suppliedIdempotencyKey,
+} from "@/lib/idempotency";
+import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  activeTrekker,
+  databaseError,
+  zodDetails,
+  zodMessage,
+} from "@/lib/api-route-support";
+import { withRequestContext } from "@/lib/request-context";
+import { getSupabaseServer } from "@/lib/supabase/server";
+import { readingSchema } from "@/lib/validation/reading-schema";
+
+export const runtime = "nodejs";
+
+export const POST = withRequestContext(
+  "/api/readings",
+  async (request, _routeContext, context) => {
+    const rateLimit = checkRateLimit(request, "readings", 120, 60_000);
+    if (!rateLimit.allowed) {
+      return failure(
+        "RATE_LIMITED",
+        `Too many sensor uploads. Retry in ${rateLimit.retryAfter} seconds.`,
+        429,
+      );
+    }
+
+    if (!env.deviceApiKeyConfigured) {
+      return failure(
+        "DEVICE_AUTH_NOT_CONFIGURED",
+        "Device authentication is not configured.",
+        503,
+      );
+    }
+    if (!isDeviceAuthorized(request)) {
+      return failure(
+        "UNAUTHORIZED_DEVICE",
+        "A valid device API key is required.",
+        401,
+      );
+    }
+    if (!suppliedIdempotencyKey(request)) {
+      return failure(
+        "IDEMPOTENCY_KEY_REQUIRED",
+        "A valid x-idempotency-key header is required.",
+        400,
+      );
+    }
+
+    const parsed = await readJson(request);
+    if (parsed.error) return parsed.error;
+    const input = readingSchema.safeParse(parsed.data);
+    if (!input.success) {
+      return validationFailure(zodMessage(input.error), zodDetails(input.error));
+    }
+
+    try {
+      if (!(await activeTrekker(input.data.trekkerId))) {
+        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+      }
+
+      const { data, error } = await getSupabaseServer()
+        .from("sensor_readings")
+        .insert({
+          trekker_id: input.data.trekkerId,
+          device_id: input.data.deviceId,
+          heart_rate: input.data.heartRate,
+          spo2: input.data.spo2,
+          altitude: input.data.altitude,
+          temperature: input.data.temperature,
+          captured_at: input.data.capturedAt,
+          request_id: idempotencyKey(request, context.requestId),
+        })
+        .select("id")
+        .single<{ id: string }>();
+
+      if (error) throw error;
+      await getSupabaseServer()
+        .from("devices")
+        .update({ last_seen_at: input.data.capturedAt })
+        .eq("id", input.data.deviceId)
+        .eq("is_active", true);
+      return success(
+        {
+          id: data.id,
+          capturedAt: input.data.capturedAt,
+          disclaimer: SENSOR_DISCLAIMER,
+        },
+        201,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        const key = idempotencyKey(request, context.requestId);
+        const { data: existing, error: lookupError } = await getSupabaseServer()
+          .from("sensor_readings")
+          .select("id, captured_at")
+          .eq("request_id", key)
+          .maybeSingle<{ id: string; captured_at: string }>();
+        if (!lookupError && existing) {
+          return success({ id: existing.id, capturedAt: existing.captured_at, idempotentReplay: true, disclaimer: SENSOR_DISCLAIMER });
+        }
+      }
+      return databaseError(error, context);
+    }
+  },
+);

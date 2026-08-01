@@ -1,26 +1,30 @@
-import { EmergencyJourney } from "./EmergencyJourney";
+import { DemoMedia } from "./DemoMedia";
 import { HeroSection } from "./HeroSection";
 import { LandingFooter } from "./LandingFooter";
 import { LandingHeader } from "./LandingHeader";
 import { PortalSection } from "./PortalSection";
-import { ProductStory } from "./ProductStory";
+import { PrototypeRoadmap } from "./PrototypeRoadmap";
 import { RescueSnapshot } from "./RescueSnapshot";
+import { SosFlow } from "./SosFlow";
 import { SystemFlow } from "./SystemFlow";
+import { TourismProblem } from "./TourismProblem";
 
 export function LandingPage() {
   return (
-    <main className="land-page" id="land-content">
-      <a className="land-skip-link" href="#land-content">
-        Skip to content
-      </a>
+    <div className="land-page">
+      <a className="land-skip-link" href="#main-content">Skip to main content</a>
       <LandingHeader />
-      <HeroSection />
-      <ProductStory />
-      <SystemFlow />
-      <EmergencyJourney />
-      <RescueSnapshot />
-      <PortalSection />
+      <main id="main-content">
+        <HeroSection />
+        <TourismProblem />
+        <SystemFlow />
+        <DemoMedia />
+        <SosFlow />
+        <RescueSnapshot />
+        <PrototypeRoadmap />
+        <PortalSection />
+      </main>
       <LandingFooter />
-    </main>
+    </div>
   );
 }
