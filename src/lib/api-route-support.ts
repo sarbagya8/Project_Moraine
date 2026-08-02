@@ -74,7 +74,9 @@ export function databaseError(
 
   return failure(
     "DATABASE_ERROR",
-    "The database operation could not be completed.",
+    process.env.NODE_ENV === "production"
+      ? "The database operation could not be completed."
+      : `The database operation could not be completed. [${databaseErrorFields(error).databaseCode}: ${databaseErrorFields(error).databaseMessage}]`,
     500,
   );
 }

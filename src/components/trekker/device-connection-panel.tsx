@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { StatusBadge, relativeAge } from "@/components/shared/portal-ui";
+import { StatusBadge, formatTime, relativeAge } from "@/components/shared/portal-ui";
 import {
   ARGUS_SENSOR_STALE_MS,
   TrekkerBleBridge,
@@ -34,9 +34,11 @@ const connectionStageLabels: Record<BleConnectionStage, string> = {
 export function DeviceConnectionPanel({
   deviceId,
   locationStaleSeconds,
+  onStoredData,
 }: {
   deviceId: string | null;
   locationStaleSeconds: number;
+  onStoredData?: () => void;
 }) {
   const bridge = useRef<TrekkerBleBridge | null>(null);
   const connectInFlight = useRef(false);
@@ -54,6 +56,7 @@ export function DeviceConnectionPanel({
   const [readingReceivedAt, setReadingReceivedAt] = useState<number | null>(null);
   const [identity, setIdentity] = useState<BleIdentity | null>(null);
   const [syncState, setSyncState] = useState("not started");
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [gps, setGps] = useState<GpsSnapshot>({
     status: "permission_not_requested",
   });
@@ -92,12 +95,14 @@ export function DeviceConnectionPanel({
           onReading: (value, synced) => {
             setReading(value);
             if (!synced) setReadingReceivedAt(Date.now());
+            if (synced) onStoredData?.();
           },
           onSyncState: setSyncState,
+          onSyncError: setSyncError,
           onLocation: setGps,
           onSosState: setSos,
         },
-        locationStaleSeconds * 1_000,
+      locationStaleSeconds * 1_000,
       );
       bridge.current = connection;
       await connection.connect(mode);
@@ -160,7 +165,9 @@ export function DeviceConnectionPanel({
         <div><dt>Identity source</dt><dd>{identity ? (identity.identitySource === "firmware" ? "ESP32 firmware" : "Assigned device record") : "Unavailable"}</dd></div>
         <div><dt>Sensor state</dt><dd><StatusBadge value={sensorDisplayState.replaceAll("_", " ")} tone={sensorDisplayState === "valid" ? "green" : sensorDisplayState === "sensor_error" ? "red" : undefined} /></dd></div>
         <div><dt>Last live reading</dt><dd>{readingReceivedAt ? relativeAge(new Date(readingReceivedAt).toISOString()) : "Unavailable"}</dd></div>
+        <div><dt>Last packet timestamp</dt><dd>{reading?.capturedAt ? formatTime(reading.capturedAt) : "No reading yet"}</dd></div>
         <div><dt>Database sync</dt><dd>{syncState}</dd></div>
+        {syncError ? <div><dt>Sync detail</dt><dd>{syncError}</dd></div> : null}
         <div><dt>Phone GPS</dt><dd><StatusBadge value={gpsDisplayStatus.replaceAll("_", " ")} tone={gpsDisplayStatus === "available" ? "green" : gpsDisplayStatus === "denied" ? "red" : undefined} /></dd></div>
         <div><dt>GPS fix</dt><dd>{gpsDetail}</dd></div>
         <div><dt>GPS captured</dt><dd>{gps.capturedAt ? relativeAge(gps.capturedAt) : "Unavailable"}</dd></div>

@@ -15,8 +15,32 @@ type TrekkerDeviceRow = {
   last_seen_at: string | null;
   firmware_version: string | null;
 };
-
 type LegacyTrekkerDeviceRow = Omit<TrekkerDeviceRow, "firmware_version">;
+
+type TrekkerReadingRow = {
+  heart_rate: number | null;
+  spo2: number | null;
+  altitude: number | null;
+  temperature: number | null;
+  pressure: number | null;
+  start_altitude: number | null;
+  current_altitude: number | null;
+  average_speed: number | null;
+  distance: number | null;
+  ams_status: string | null;
+  fall_detected: boolean | null;
+  fall_type: string | null;
+  sos_countdown: boolean | null;
+  sos_active: boolean | null;
+  sensor_state: string | null;
+  device_id: string;
+  captured_at: string;
+  request_id: string | null;
+};
+type LegacyTrekkerReadingRow = Pick<
+  TrekkerReadingRow,
+  "heart_rate" | "spo2" | "altitude" | "temperature" | "device_id" | "captured_at" | "request_id"
+>;
 
 export const GET = withRequestContext(
   "/api/trekker/me",
@@ -38,16 +62,14 @@ export const GET = withRequestContext(
           .eq("is_active", true)
           .maybeSingle(),
         withHardwareSchemaFallback<TrekkerDeviceRow, LegacyTrekkerDeviceRow>({
-          enriched: () => db
-            .from("devices")
+          enriched: () => db.from("devices")
             .select("id, is_active, last_seen_at, firmware_version")
             .eq("trekker_id", trekkerId)
-            .maybeSingle(),
-          legacy: () => db
-            .from("devices")
+            .maybeSingle<TrekkerDeviceRow>(),
+          legacy: () => db.from("devices")
             .select("id, is_active, last_seen_at")
             .eq("trekker_id", trekkerId)
-            .maybeSingle(),
+            .maybeSingle<LegacyTrekkerDeviceRow>(),
           adaptLegacy: (row) => row ? { ...row, firmware_version: null } : null,
           context,
           operation: "load trekker device",
@@ -57,26 +79,36 @@ export const GET = withRequestContext(
           .from("locations")
           .select("latitude, longitude, accuracy_meters, altitude, captured_at")
           .eq("trekker_id", trekkerId)
+          .neq("source", "demo")
           .order("captured_at", { ascending: false })
           .limit(30),
-        withHardwareSchemaFallback({
-          enriched: () => db
-            .from("sensor_readings")
-            .select(
-              "heart_rate, spo2, altitude, temperature, sensor_state, device_id, captured_at",
-            )
+        withHardwareSchemaFallback<TrekkerReadingRow[], LegacyTrekkerReadingRow[]>({
+          enriched: () => db.from("sensor_readings")
+            .select("heart_rate, spo2, altitude, temperature, pressure, start_altitude, current_altitude, average_speed, distance, ams_status, fall_detected, fall_type, sos_countdown, sos_active, sensor_state, device_id, captured_at, request_id")
             .eq("trekker_id", trekkerId)
+            .not("request_id", "like", "argus-demo-reading-%")
             .order("captured_at", { ascending: false })
             .limit(20),
-          legacy: () => db
-            .from("sensor_readings")
-            .select(
-              "heart_rate, spo2, altitude, temperature, device_id, captured_at",
-            )
+          legacy: () => db.from("sensor_readings")
+            .select("heart_rate, spo2, altitude, temperature, device_id, captured_at, request_id")
             .eq("trekker_id", trekkerId)
+            .not("request_id", "like", "argus-demo-reading-%")
             .order("captured_at", { ascending: false })
             .limit(20),
-          adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: "valid" })),
+          adaptLegacy: (rows) => (rows || []).map((row) => ({
+            ...row,
+            pressure: null,
+            start_altitude: null,
+            current_altitude: null,
+            average_speed: null,
+            distance: null,
+            ams_status: null,
+            fall_detected: null,
+            fall_type: null,
+            sos_countdown: null,
+            sos_active: null,
+            sensor_state: null,
+          })),
           context,
           operation: "load trekker sensor readings",
           table: "sensor_readings",
@@ -116,6 +148,8 @@ export const GET = withRequestContext(
       freshness: {
         locationSeconds: env.locationStaleSeconds,
         readingSeconds: env.readingStaleSeconds,
+        deviceOnlineSeconds: env.deviceOnlineSeconds,
+        deviceOfflineSeconds: env.deviceOfflineSeconds,
       },
       trekker: {
         id: profile.data.id,
@@ -163,6 +197,16 @@ export const GET = withRequestContext(
                 ? null
                 : Number(latestReading.altitude),
             temperature: latestReading.temperature == null ? null : Number(latestReading.temperature),
+            pressure: latestReading.pressure == null ? null : Number(latestReading.pressure),
+            startAltitude: latestReading.start_altitude == null ? null : Number(latestReading.start_altitude),
+            currentAltitude: latestReading.current_altitude == null ? null : Number(latestReading.current_altitude),
+            averageSpeed: latestReading.average_speed == null ? null : Number(latestReading.average_speed),
+            distance: latestReading.distance == null ? null : Number(latestReading.distance),
+            amsStatus: latestReading.ams_status,
+            fallDetected: latestReading.fall_detected == null ? null : Boolean(latestReading.fall_detected),
+            fallType: latestReading.fall_type,
+            sosCountdown: latestReading.sos_countdown == null ? null : Boolean(latestReading.sos_countdown),
+            physicalSos: latestReading.sos_active == null ? null : Boolean(latestReading.sos_active),
             deviceId: latestReading.device_id,
             capturedAt: latestReading.captured_at,
             ageSeconds: ageSeconds(latestReading.captured_at),
@@ -174,6 +218,16 @@ export const GET = withRequestContext(
         sensorState: row.sensor_state,
         altitude: row.altitude == null ? null : Number(row.altitude),
         temperature: row.temperature == null ? null : Number(row.temperature),
+        pressure: row.pressure == null ? null : Number(row.pressure),
+        startAltitude: row.start_altitude == null ? null : Number(row.start_altitude),
+        currentAltitude: row.current_altitude == null ? null : Number(row.current_altitude),
+        averageSpeed: row.average_speed == null ? null : Number(row.average_speed),
+        distance: row.distance == null ? null : Number(row.distance),
+        amsStatus: row.ams_status,
+        fallDetected: row.fall_detected == null ? null : Boolean(row.fall_detected),
+        fallType: row.fall_type,
+        sosCountdown: row.sos_countdown == null ? null : Boolean(row.sos_countdown),
+        physicalSos: row.sos_active == null ? null : Boolean(row.sos_active),
         capturedAt: row.captured_at,
       })),
       symptoms: (symptoms.data || []).map((row) => ({

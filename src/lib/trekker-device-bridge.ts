@@ -1,7 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  insertSensorReadingCompatible,
   withHardwareSchemaFallback,
 } from "./database-schema";
 import { requestSession } from "./portal-auth";
@@ -48,7 +47,7 @@ export async function storeBridgeReading(
   input: z.infer<typeof bridgeReadingSchema>,
   requestId: string,
 ) {
-  const { data, error, hardwareSchemaReady } = await insertSensorReadingCompatible(db, {
+  const { data, error } = await db.from("sensor_readings").insert({
       trekker_id: owner.trekkerId,
       device_id: owner.deviceId,
       heart_rate: input.heartRate,
@@ -70,7 +69,7 @@ export async function storeBridgeReading(
       sos_active: input.sosActive ?? false,
       captured_at: input.capturedAt,
       request_id: requestId,
-    });
+    }).select("id").single<{ id: string }>();
   if (error && error.code !== "23505") throw error;
 
   let storedId = data?.id ?? null;
@@ -96,7 +95,7 @@ export async function storeBridgeReading(
     id: storedId,
     capturedAt: input.capturedAt,
     sensorState: input.sensorState,
-    hardwareSchemaReady,
+    hardwareSchemaReady: true,
   };
 }
 

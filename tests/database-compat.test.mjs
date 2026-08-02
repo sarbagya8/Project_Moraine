@@ -60,7 +60,7 @@ test("structured database diagnostics retain safe PostgREST fields", () => {
   );
 });
 
-test("both dashboard loaders use the shared hardware-schema fallback", () => {
+test("dashboard loaders tolerate optional hardware columns without inventing sensor state", () => {
   const authority = readFileSync(
     new URL("../src/app/api/authority/overview/route.ts", import.meta.url),
     "utf8",
@@ -71,8 +71,19 @@ test("both dashboard loaders use the shared hardware-schema fallback", () => {
   );
   for (const source of [authority, trekker]) {
     assert.match(source, /withHardwareSchemaFallback/);
-    assert.match(source, /hardwareSchemaReady/);
+    assert.match(source, /argus-demo-reading-%/);
+    assert.match(source, /sensor_state: null/);
+    assert.doesNotMatch(source, /sensor_state: ["']valid["']/);
   }
+});
+
+test("schema detector does not mislabel network, RLS, or unrelated-column errors", () => {
+  for (const error of [
+    { code: "42501", message: "permission denied for table sensor_readings" },
+    { code: "PGRST301", message: "JWT expired" },
+    { code: "FETCH_ERROR", message: "network unavailable" },
+    { code: "42703", message: "column trekkers.unrelated_column does not exist" },
+  ]) assert.equal(isHardwareMigrationError(error), false);
 });
 
 test("SOS compatibility preserves request-id idempotency while migration 010 is pending", () => {
@@ -95,7 +106,38 @@ test("database readiness command reports exact operations without printing crede
     "utf8",
   );
   assert.match(checker, /ARGUS device firmware/);
-  assert.match(checker, /MAX30102 sensor state/);
+  assert.match(checker, /sensor state/);
+  assert.match(checker, /physical SOS state/);
   assert.match(checker, /physical SOS identity/);
   assert.doesNotMatch(checker, /console\.(?:info|error)\([^\n]*serviceRoleKey/);
+});
+
+test("final telemetry migration is non-destructive and includes every ESP32 field", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/015_final_realtime_telemetry_contract.sql", import.meta.url),
+    "utf8",
+  );
+  for (const column of [
+    "sensor_state", "pressure", "start_altitude", "current_altitude",
+    "average_speed", "distance", "ams_status", "fall_detected", "fall_type",
+    "sos_countdown", "sos_active", "device_id", "captured_at",
+  ]) assert.match(migration, new RegExp(`\\b${column}\\b`));
+  assert.doesNotMatch(migration, /\b(?:delete\s+from|truncate\s+table|drop\s+table)\b/i);
+  assert.match(migration, /heart_rate drop not null/);
+  assert.match(migration, /spo2 drop not null/);
+});
+
+test("cleanup SQL preserves the physical assignment and targets stable seed markers", () => {
+  const preview = readFileSync(new URL("../supabase/cleanup/preview_demo_test_rows.sql", import.meta.url), "utf8");
+  const cleanup = readFileSync(new URL("../supabase/cleanup/cleanup_demo_test_rows.sql", import.meta.url), "utf8");
+  assert.match(preview, /argus-demo-reading-%/);
+  assert.match(cleanup, /begin;/i);
+  assert.match(cleanup, /commit;/i);
+  assert.match(cleanup, /ARGUS-ESP32-DEMO-01/);
+  assert.doesNotMatch(cleanup, /delete from public\.devices where id = 'ARGUS-ESP32-DEMO-01'/i);
+});
+
+test("production-safe environment example disables demo mode", () => {
+  const environment = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
+  assert.match(environment, /^DEMO_MODE=false$/m);
 });

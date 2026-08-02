@@ -44,7 +44,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`. Keep `DEMO_MODE=true` until the database and fixed-recipient WhatsApp smoke test work.
+Open `http://localhost:3000`. Keep `DEMO_MODE=false` for physical-device and production runs. Enable it only for an explicit local simulated-notification test.
 
 ## Database setup
 
@@ -63,6 +63,8 @@ For a new Supabase project, run the numbered files in `supabase/migrations` in o
 11. `011_reconcile_interrupted_notification_attempts.sql`
 12. `012_single_active_sos_and_pending_attempts.sql`
 13. `013_hardware_contract_reconciliation.sql`
+14. `014_esp32_telemetry_payload.sql`
+15. `015_final_realtime_telemetry_contract.sql`
 
 After the migrations, run `npm run seed:demo` for the explicit local/hackathon dataset. Use `npm run seed:demo:active-sos` only when an active simulated SOS is wanted. Run `npm run seed:demo:reset` to remove those stable records. On an existing project, back up first and apply only missing migrations. Do not edit migrations that have already been applied.
 
@@ -72,11 +74,30 @@ Verify the hosted schema before starting the portals:
 npm run db:check
 ```
 
-The check prints only operation names and sanitized PostgREST errors. If
-migration 010 or 013 is pending, existing Authority and Trekker records remain
-readable in compatibility mode, but the migration is still required for
-firmware metadata, unavailable sensor-state persistence, device-linked GPS,
-hardware SOS metadata, device foreign keys, and the complete sensor-state contract.
+The check prints only operation names and sanitized PostgREST errors. Existing
+projects missing hardware columns should apply the idempotent convergence file
+`supabase/migrations/015_final_realtime_telemetry_contract.sql` in the Supabase
+SQL Editor, then rerun `npm run db:check`. The runtime intentionally does not
+invent legacy sensor state or zero values when the final schema is absent.
+
+The read-only `npm run db:audit-demo` command classifies hosted records without
+printing secrets or exact GPS coordinates. Review
+`supabase/cleanup/preview_demo_test_rows.sql` before separately approving and
+running `supabase/cleanup/cleanup_demo_test_rows.sql`. The cleanup preserves the
+current `TRK-DEMO-001` / `ARGUS-ESP32-DEMO-01` physical assignment.
+
+For a CLI-linked project, the exact schema workflow is:
+
+```bash
+npx supabase link --project-ref <YOUR_PROJECT_REF>
+npx supabase migration list
+npx supabase db push
+npm run db:check
+npm run db:types
+```
+
+Confirm the migration list before `db push`; this repository was not linked in
+the development workspace, so no hosted migration was applied automatically.
 
 The service-role key is used only by server code. RLS stays enabled, and direct `anon` and `authenticated` access to operational tables remains revoked.
 
@@ -89,7 +110,7 @@ Copy `.env.example`. The main groups are:
 - portal authentication: `AUTHORITY_USERNAME`, `AUTHORITY_PASSWORD_HASH`, `SESSION_SECRET`, `SESSION_MAX_AGE_SECONDS`
 - URLs and safety: `NEXT_PUBLIC_APP_URL`, `DEMO_MODE`
 - WhatsApp: all `WHATSAPP_*` values plus `META_APP_SECRET`; `WHATSAPP_RECIPIENT_NUMBER` is the fixed prototype recipient for smoke tests and live SOS alerts
-- reliability: freshness, SOS cooldown, notification retry cooldown, timeout, and body-size values
+- reliability: location/reading/device freshness, SOS cooldown, notification retry cooldown, timeout, and body-size values
 
 Never prefix a secret with `NEXT_PUBLIC_`. `WHATSAPP_RECIPIENT_NUMBER` is the only destination used by the smoke-test endpoint and live SOS alerts; the browser and database cannot override it.
 

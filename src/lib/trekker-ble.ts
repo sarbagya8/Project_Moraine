@@ -181,6 +181,7 @@ export type BleBridgeHandlers = {
   onIdentity(identity: BleIdentity | null): void;
   onReading(reading: BleReading, synced: boolean): void;
   onSyncState(state: DatabaseSyncState): void;
+  onSyncError(message: string | null): void;
   onLocation(snapshot: GpsSnapshot): void;
   onSosState(state: SosDeliveryState): void;
 };
@@ -881,6 +882,7 @@ async function sendQueued(item: BridgeQueueItem) {
     },
     body: JSON.stringify(item.body),
   });
+  const requestId = response.headers.get("x-request-id") || undefined;
   const result = (await response.json().catch(() => null)) as {
     success?: boolean;
     data?: {
@@ -888,11 +890,16 @@ async function sendQueued(item: BridgeQueueItem) {
       databaseStatus?: string;
       event?: { id?: string; notificationStatus?: string };
     };
-    error?: { message?: string };
+    error?: { code?: string; message?: string };
   } | null;
   if (!response.ok || !result?.success) {
+    const code = result?.error?.code || "BRIDGE_REQUEST_FAILED";
+    const diagnostic = [
+      `HTTP ${response.status}`,
+      requestId ? `request ${requestId}` : null,
+    ].filter(Boolean).join(", ");
     throw new Error(
-      result?.error?.message || `Bridge request failed with HTTP ${response.status}.`,
+      `${result?.error?.message || "Bridge request failed."} [${code}; ${diagnostic}]`,
     );
   }
   return result.data ?? {};
@@ -1592,6 +1599,7 @@ export class TrekkerBleBridge {
         }
         if (item.kind === "reading" || item.kind === "location") {
           this.handlers.onSyncState("synced");
+          this.handlers.onSyncError(null);
         }
         if (item.kind === "sos") {
           this.handlers.onSosState({
@@ -1608,6 +1616,9 @@ export class TrekkerBleBridge {
       } catch (error) {
         if (item.kind === "reading" || item.kind === "location") {
           this.handlers.onSyncState(navigator.onLine ? "failed" : "syncing");
+          this.handlers.onSyncError(
+            error instanceof Error ? error.message : "Database synchronization failed.",
+          );
         }
         if (item.kind === "sos") {
           this.handlers.onSosState({

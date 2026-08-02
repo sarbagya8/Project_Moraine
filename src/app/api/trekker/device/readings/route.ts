@@ -4,6 +4,8 @@ import { failure, readJson, success, validationFailure } from "@/lib/api-respons
 import { suppliedIdempotencyKey } from "@/lib/idempotency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logInfo, withRequestContext } from "@/lib/request-context";
+import { logError } from "@/lib/request-context";
+import { databaseErrorFields } from "@/lib/database-schema";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   authorizedBridgeDevice,
@@ -48,7 +50,24 @@ export const POST = withRequestContext(
       });
       return success(stored, 201);
     } catch (error) {
-      return databaseError(error, context);
+      logError(context, "ble.reading_persistence_failed", {
+        endpoint: "/api/trekker/device/readings",
+        table: "sensor_readings",
+        attemptedFields: [
+          "device_id", "trekker_id", "heart_rate", "spo2", "sensor_state",
+          "altitude", "pressure", "temperature", "start_altitude",
+          "current_altitude", "average_speed", "distance", "ams_status",
+          "fall_detected", "fall_type", "sos_countdown", "sos_active",
+          "captured_at", "request_id",
+        ],
+        deviceId: input.data.deviceId,
+        capturedAt: input.data.capturedAt,
+        ...databaseErrorFields(error),
+      });
+      return databaseError(error, context, {
+        name: "persist BLE telemetry",
+        table: "sensor_readings",
+      });
     }
   },
 );

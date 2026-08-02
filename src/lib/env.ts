@@ -48,6 +48,12 @@ export const env = {
   get readingStaleSeconds() {
     return boundedNumber(process.env.READING_STALE_SECONDS, 300, 15, 86_400);
   },
+  get deviceOnlineSeconds() {
+    return boundedNumber(process.env.DEVICE_ONLINE_SECONDS, 120, 15, 3_600);
+  },
+  get deviceOfflineSeconds() {
+    return boundedNumber(process.env.DEVICE_OFFLINE_SECONDS, 600, 60, 86_400);
+  },
   get sosCooldownSeconds() {
     return boundedNumber(process.env.SOS_COOLDOWN_SECONDS, 30, 10, 3_600);
   },

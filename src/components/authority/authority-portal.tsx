@@ -20,6 +20,7 @@ import {
   relativeAge,
   StatusBadge,
 } from "@/components/shared/portal-ui";
+import { deviceFreshnessState } from "@/lib/device-freshness";
 
 const SafetyMap = dynamic(() => import("@/components/shared/safety-map"), {
   ssr: false,
@@ -36,13 +37,15 @@ export type AuthorityView =
   | "notifications"
   | "settings";
 
-function deviceState(lastSeenAt: string | null, isActive = true) {
-  if (!isActive) return "offline";
-  if (!lastSeenAt) return "offline";
-  const age = Date.now() - new Date(lastSeenAt).getTime();
-  if (age <= 5 * 60_000) return "online";
-  if (age <= 30 * 60_000) return "stale";
-  return "offline";
+function deviceState(
+  lastSeenAt: string | null,
+  isActive: boolean,
+  freshness: AuthorityOverview["freshness"],
+) {
+  return deviceFreshnessState(lastSeenAt, isActive, {
+    onlineSeconds: freshness.deviceOnlineSeconds,
+    offlineSeconds: freshness.deviceOfflineSeconds,
+  });
 }
 
 function sourceLabel(source: string) {
@@ -163,8 +166,8 @@ export function AuthorityPortal({
 
   const activeEvents = data.emergencies.filter((event) => event.status !== "resolved");
   const failedAttempts = data.notificationAttempts.filter((attempt) => attempt.status === "failed");
-  const onlineDevices = data.devices.filter((device) => deviceState(device.lastSeenAt, device.isActive) === "online");
-  const staleDevices = data.devices.filter((device) => deviceState(device.lastSeenAt, device.isActive) !== "online");
+  const onlineDevices = data.devices.filter((device) => deviceState(device.lastSeenAt, device.isActive, data.freshness) === "online");
+  const staleDevices = data.devices.filter((device) => deviceState(device.lastSeenAt, device.isActive, data.freshness) !== "online");
 
   let content: React.ReactNode;
   if (view === "dashboard") {
@@ -220,7 +223,7 @@ export function AuthorityPortal({
             <div className="section-heading"><div><p className="eyebrow">Device health</p><h2>Latest connections</h2></div></div>
             <div className="stack-list">
               {data.devices.slice(0, 8).map((device) => {
-                const state = deviceState(device.lastSeenAt, device.isActive);
+                const state = deviceState(device.lastSeenAt, device.isActive, data.freshness);
                 return (
                   <div className="list-row" key={device.id}>
                     <div><strong>{device.id}</strong><small>{device.trekkerName || "Unassigned"}</small></div>
@@ -360,7 +363,7 @@ export function AuthorityPortal({
       </>
     ) : <ErrorState message="Could not load this emergency." />;
   } else if (view === "trekkers") {
-    content = <TrekkersList trekkers={data.trekkers} emergencies={activeEvents} />;
+    content = <TrekkersList trekkers={data.trekkers} emergencies={activeEvents} freshness={data.freshness} />;
   } else if (view === "trekker") {
     const trekker = data.trekkers.find((item) => item.id === recordId);
     const history = data.emergencies.filter((event) => event.trekkerId === recordId);
@@ -392,7 +395,7 @@ export function AuthorityPortal({
   );
 }
 
-function TrekkersList({ trekkers, emergencies }: { trekkers: PortalTrekker[]; emergencies: PortalEmergency[] }) {
+function TrekkersList({ trekkers, emergencies, freshness }: { trekkers: PortalTrekker[]; emergencies: PortalEmergency[]; freshness: AuthorityOverview["freshness"] }) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState("all");
   const filtered = useMemo(() => trekkers.filter((trekker) => {
@@ -413,7 +416,7 @@ function TrekkersList({ trekkers, emergencies }: { trekkers: PortalTrekker[]; em
       <section className="card-list">
         {filtered.map((trekker) => {
           const emergency = emergencies.find((event) => event.trekkerId === trekker.id);
-          const stateLabel = trekker.device ? deviceState(trekker.device.lastSeenAt, trekker.device.isActive) : "offline";
+          const stateLabel = trekker.device ? deviceState(trekker.device.lastSeenAt, trekker.device.isActive, freshness) : "never_connected";
           return (
             <article className="person-card" key={trekker.id}>
               <div className="section-heading"><div><p className="eyebrow">{trekker.id}</p><h2>{trekker.name}</h2></div>{emergency ? <StatusBadge value="active SOS" tone="red" /> : <StatusBadge value={trekker.isActive ? "active" : "inactive"} />}</div>
@@ -445,6 +448,10 @@ function TrekkerDetail({ trekker, history, attempts, freshness }: { trekker: Por
         <DataCard label="Ambient temperature" value={trekker.latestReading?.temperature == null ? "Unavailable" : `${trekker.latestReading.temperature} °C`} />
         <DataCard label="Sensor state" value={trekker.latestReading?.sensorState ? <StatusBadge value={trekker.latestReading.sensorState.replaceAll("_", " ")} /> : "Unavailable"} />
         <DataCard label="Altitude" value={trekker.latestReading?.altitude == null ? "Unavailable" : `${trekker.latestReading.altitude} m`} />
+        <DataCard label="Pressure" value={trekker.latestReading?.pressure == null ? "Unavailable" : `${trekker.latestReading.pressure} hPa`} />
+        <DataCard label="AMS indicator" value={trekker.latestReading?.amsStatus ?? "Unavailable"} detail="Device-generated; not a diagnosis." />
+        <DataCard label="Fall state" value={!trekker.latestReading || trekker.latestReading.fallDetected == null ? "Unavailable" : trekker.latestReading.fallDetected ? `Detected${trekker.latestReading.fallType ? ` · ${trekker.latestReading.fallType}` : ""}` : "Clear"} />
+        <DataCard label="Physical SOS" value={!trekker.latestReading || trekker.latestReading.physicalSos == null || trekker.latestReading.sosCountdown == null ? "Unavailable" : trekker.latestReading.physicalSos ? "Active" : trekker.latestReading.sosCountdown ? "Countdown" : "Inactive"} />
       </section>
       <section className="content-grid">
         <article className="panel"><p className="eyebrow">Latest GPS</p><h2>Location</h2><SafetyMap points={trekker.latestLocation ? [{ id: trekker.id, latitude: trekker.latestLocation.latitude, longitude: trekker.latestLocation.longitude, accuracyMeters: trekker.latestLocation.accuracyMeters, capturedAt: trekker.latestLocation.capturedAt, label: trekker.name, detail: locationStale ? "Stale location" : "Recent location", status: locationStale ? "stale" : "normal" }] : []} /></article>
@@ -455,7 +462,7 @@ function TrekkerDetail({ trekker, history, attempts, freshness }: { trekker: Por
         <div className="section-heading"><div><p className="eyebrow">Telemetry</p><h2>Recent readings</h2></div></div>
         {trekker.readingHistory.length ? (
           <div className="table-wrap"><table><thead><tr><th>Captured</th><th>State</th><th>Heart rate</th><th>SpO₂</th><th>Ambient temp.</th><th>Altitude</th></tr></thead><tbody>
-            {[...trekker.readingHistory].reverse().map((reading) => <tr key={`${reading.capturedAt}-${reading.sensorState}`}><td>{formatTime(reading.capturedAt)}</td><td>{reading.sensorState.replaceAll("_", " ")}</td><td>{reading.heartRate == null ? "Unavailable" : `${reading.heartRate} bpm`}</td><td>{reading.spo2 == null ? "Unavailable" : `${reading.spo2}%`}</td><td>{reading.temperature == null ? "Unavailable" : `${reading.temperature} °C`}</td><td>{reading.altitude == null ? "Unavailable" : `${reading.altitude} m`}</td></tr>)}
+            {[...trekker.readingHistory].reverse().map((reading) => <tr key={`${reading.capturedAt}-${reading.sensorState}`}><td>{formatTime(reading.capturedAt)}</td><td>{reading.sensorState ? reading.sensorState.replaceAll("_", " ") : "Unavailable"}</td><td>{reading.heartRate == null ? "Unavailable" : `${reading.heartRate} bpm`}</td><td>{reading.spo2 == null ? "Unavailable" : `${reading.spo2}%`}</td><td>{reading.temperature == null ? "Unavailable" : `${reading.temperature} °C`}</td><td>{reading.altitude == null ? "Unavailable" : `${reading.altitude} m`}</td></tr>)}
           </tbody></table></div>
         ) : <EmptyState title="No recent readings" />}
       </section>
@@ -513,7 +520,7 @@ function DeviceManager({ data, refresh }: { data: AuthorityOverview; refresh: ()
       </section>
       <section className="card-list">
         {data.devices.map((device) => {
-          const state = deviceState(device.lastSeenAt, device.isActive);
+          const state = deviceState(device.lastSeenAt, device.isActive, data.freshness);
           return <article className="person-card" key={device.id}><div className="section-heading"><div><p className="eyebrow">Device</p><h2>{device.id}</h2></div><StatusBadge value={state} /></div><p>{device.trekkerName || "Unassigned"}</p><p className="muted">Firmware: {device.firmwareVersion || "Not verified"} · Last seen: {relativeAge(device.lastSeenAt)}</p><div className="button-row"><button className="secondary-button" onClick={() => void update(device.id, { isActive: !device.isActive })}>{device.isActive ? "Deactivate" : "Activate"}</button><button className="secondary-button" onClick={() => void update(device.id, { trekkerId: null })}>Unassign</button><button className="secondary-button" onClick={() => void update(device.id, { regeneratePairingCode: true })}>New pairing code</button></div></article>;
         })}
         {!data.devices.length ? <EmptyState title="No devices are registered yet" /> : null}

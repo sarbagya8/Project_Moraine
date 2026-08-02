@@ -4,19 +4,19 @@ import { SetupConsole } from "@/components/setup-console";
 const steps = [
   {
     title: "Apply the database migration",
-    body: "Run migrations 001 through 008 in numeric order. Existing projects should apply only migrations that are still missing.",
+    body: "Run migrations 001 through 015 in numeric order. Existing projects with an incomplete hardware schema can apply the idempotent 015 convergence migration.",
   },
   {
     title: "Set server environment variables",
     body: "Add Supabase, API keys, the public app URL, and Meta WhatsApp credentials in .env.local and the deployment dashboard.",
   },
   {
-    title: "Test in simulation mode",
-    body: "Keep DEMO_MODE=true while checking dashboards, GPS, SOS deduplication, Rescue Passports, and ESP32 API authentication.",
+    title: "Keep physical runs real",
+    body: "Use DEMO_MODE=false while checking the ESP32, dashboards, GPS, SOS deduplication, Rescue Passports, and persistence.",
   },
   {
     title: "Verify WhatsApp safely",
-    body: "Use the fixed-recipient hello_world smoke test, then configure the approved ARGUS SOS template before disabling demo mode.",
+    body: "Use the fixed-recipient hello_world smoke test, then configure the approved ARGUS SOS template. Never mark failed attempts as sent.",
   },
 ];
 

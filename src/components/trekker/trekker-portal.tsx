@@ -20,6 +20,7 @@ import {
   StatusBadge,
 } from "@/components/shared/portal-ui";
 import { DeviceConnectionPanel } from "@/components/trekker/device-connection-panel";
+import { deviceFreshnessState } from "@/lib/device-freshness";
 
 const SafetyMap = dynamic(() => import("@/components/shared/safety-map"), {
   ssr: false,
@@ -233,14 +234,17 @@ export function TrekkerPortal() {
     !data.latestReading ||
     (data.latestReading.ageSeconds || 0) > data.freshness.readingSeconds;
   const displayedSos = sosResult ?? activeSos;
-  const state = data.device?.isActive
-    ? data.device.lastSeenAt &&
-      new Date(data.generatedAt).getTime() -
-          new Date(data.device.lastSeenAt).getTime() <
-        5 * 60_000
-      ? "online"
-      : "stale"
-    : "offline";
+  const state = data.device
+    ? deviceFreshnessState(
+        data.device.lastSeenAt,
+        data.device.isActive,
+        {
+          onlineSeconds: data.freshness.deviceOnlineSeconds,
+          offlineSeconds: data.freshness.deviceOfflineSeconds,
+        },
+        new Date(data.generatedAt).getTime(),
+      )
+    : "never_connected";
 
   return (
     <main className="trekker-page">
@@ -266,16 +270,24 @@ export function TrekkerPortal() {
       <DeviceConnectionPanel
         deviceId={data.device?.id ?? null}
         locationStaleSeconds={data.freshness.locationSeconds}
+        onStoredData={() => void load()}
       />
 
       <section>
         <div className="section-heading"><div><p className="eyebrow">Current safety status</p><h2>Your latest information</h2></div></div>
         <div className="summary-grid">
           <DataCard label="Device" value={<StatusBadge value={state} />} detail={data.device ? `${data.device.id} · last seen ${relativeAge(data.device.lastSeenAt)}` : "No device assigned"} />
-          <DataCard label="Stored heart rate" value={data.latestReading?.heartRate == null ? "Unavailable" : `${data.latestReading.heartRate} bpm`} detail={readingStale ? `Stale database reading from ${relativeAge(data.latestReading?.capturedAt)}` : "Recent database reading"} />
+          <DataCard label="Stored heart rate" value={!data.latestReading ? "No stored reading yet" : data.latestReading.heartRate == null ? "Unavailable" : `${data.latestReading.heartRate} bpm`} detail={readingStale ? `Stale database reading from ${relativeAge(data.latestReading?.capturedAt)}` : `Persisted from ${data.latestReading?.deviceId || "assigned device"}`} />
           <DataCard label="Stored SpO₂" value={data.latestReading?.spo2 == null ? "Unavailable" : `${data.latestReading.spo2}%`} detail="Latest persisted reading; live BLE values appear in the wristband panel above." />
+          <DataCard label="Stored reading time" value={data.latestReading ? formatTime(data.latestReading.capturedAt) : "No stored reading yet"} detail={data.latestReading ? `${readingStale ? "Stale" : "Recent"} · ${data.latestReading.deviceId || "Source device unavailable"}` : "Waiting for a successful wristband database write."} />
           <DataCard label="Ambient temperature" value={data.latestReading?.temperature == null ? "Unavailable" : `${data.latestReading.temperature} °C`} />
           <DataCard label="Altitude" value={data.latestReading?.altitude == null ? "Unavailable" : `${data.latestReading.altitude} m`} />
+          <DataCard label="Pressure" value={data.latestReading?.pressure == null ? "Unavailable" : `${data.latestReading.pressure} hPa`} />
+          <DataCard label="Average speed" value={data.latestReading?.averageSpeed == null ? "Unavailable" : `${data.latestReading.averageSpeed} m/s`} />
+          <DataCard label="Distance" value={data.latestReading?.distance == null ? "Unavailable" : `${data.latestReading.distance} m`} />
+          <DataCard label="AMS indicator" value={data.latestReading?.amsStatus ?? "Unavailable"} detail="Device-generated safety indicator; not a diagnosis." />
+          <DataCard label="Fall state" value={!data.latestReading || data.latestReading.fallDetected == null ? "Unavailable" : data.latestReading.fallDetected ? `Detected${data.latestReading.fallType ? ` · ${data.latestReading.fallType}` : ""}` : "Clear"} />
+          <DataCard label="Physical SOS" value={!data.latestReading || data.latestReading.physicalSos == null || data.latestReading.sosCountdown == null ? "Unavailable" : data.latestReading.physicalSos ? "Active" : data.latestReading.sosCountdown ? "Countdown" : "Inactive"} />
           <DataCard label="Location" value={<StatusBadge value={!data.latestLocation ? "unavailable" : locationStale ? "stale" : "recent"} />} detail={relativeAge(data.latestLocation?.capturedAt)} />
         </div>
       </section>

@@ -66,9 +66,19 @@ export type PortalReading = {
   deviceId?: string;
   heartRate: number | null;
   spo2: number | null;
-  sensorState: string;
+  sensorState: string | null;
   altitude: number | null;
   temperature: number | null;
+  pressure: number | null;
+  startAltitude: number | null;
+  currentAltitude: number | null;
+  averageSpeed: number | null;
+  distance: number | null;
+  amsStatus: string | null;
+  fallDetected: boolean | null;
+  fallType: string | null;
+  sosCountdown: boolean | null;
+  physicalSos: boolean | null;
   capturedAt: string;
   ageSeconds?: number;
 };
@@ -174,7 +184,7 @@ export type NotificationAttempt = {
 export type AuthorityOverview = {
   generatedAt: string;
   hardwareSchemaReady: boolean;
-  freshness: { locationSeconds: number; readingSeconds: number };
+  freshness: { locationSeconds: number; readingSeconds: number; deviceOnlineSeconds: number; deviceOfflineSeconds: number };
   trekkers: PortalTrekker[];
   devices: PortalDevice[];
   emergencies: PortalEmergency[];
@@ -184,7 +194,7 @@ export type AuthorityOverview = {
 export type TrekkerOverview = {
   generatedAt: string;
   hardwareSchemaReady: boolean;
-  freshness: { locationSeconds: number; readingSeconds: number };
+  freshness: { locationSeconds: number; readingSeconds: number; deviceOnlineSeconds: number; deviceOfflineSeconds: number };
   trekker: { id: string; name: string; route: string | null };
   device: PortalDevice | null;
   latestLocation: PortalLocation | null;

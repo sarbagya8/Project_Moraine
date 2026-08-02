@@ -60,7 +60,7 @@ type RescueSensorRow = {
   spo2: number | null;
   altitude: number | null;
   temperature: number | null;
-  sensor_state: string;
+  sensor_state: string | null;
   captured_at: string;
 };
 
@@ -148,7 +148,7 @@ export const GET = withRequestContext<RouteContext>(
               .order("captured_at", { ascending: false })
               .limit(20)
               .returns<LegacyRescueSensorRow[]>(),
-            adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: "valid" })),
+            adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: null })),
             context,
             operation: "load rescue sensor history",
             table: "sensor_readings",

@@ -30,22 +30,12 @@ export const POST = withRequestContext("/api/trekker/device/verify", async (requ
       return failure("DEVICE_IDENTITY_MISMATCH", "The wristband identity does not match its server assignment.", 403);
     }
     const verifiedAt = new Date().toISOString();
-    const enrichedUpdate: Record<string, string> = {
-      last_verified_at: verifiedAt,
-      last_seen_at: verifiedAt,
-    };
-    if (identity.data.firmwareVersion) {
-      enrichedUpdate.firmware_version = identity.data.firmwareVersion;
-    }
+    const updateFields: Record<string, string> = { last_verified_at: verifiedAt };
+    if (identity.data.firmwareVersion) updateFields.firmware_version = identity.data.firmwareVersion;
     const update = await updateWithHardwareSchemaFallback({
       enriched: () => db
         .from("devices")
-        .update(enrichedUpdate)
-        .eq("id", owner.deviceId)
-        .eq("trekker_id", owner.trekkerId),
-      legacy: () => db
-        .from("devices")
-        .update({ last_seen_at: verifiedAt })
+        .update(updateFields)
         .eq("id", owner.deviceId)
         .eq("trekker_id", owner.trekkerId),
       context,

@@ -25,11 +25,9 @@ export const GET = withRequestContext(
           )
           .order("name"),
         withHardwareSchemaFallback({
-          enriched: () => db
-            .from("devices")
+          enriched: () => db.from("devices")
             .select("id, trekker_id, is_active, last_seen_at, firmware_version, created_at, updated_at"),
-          legacy: () => db
-            .from("devices")
+          legacy: () => db.from("devices")
             .select("id, trekker_id, is_active, last_seen_at, created_at, updated_at"),
           adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, firmware_version: null })),
           context,
@@ -37,18 +35,14 @@ export const GET = withRequestContext(
           table: "devices",
         }),
         withHardwareSchemaFallback({
-          enriched: () => db
-            .from("sos_events")
-            .select(
-              "id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, sensor_state, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
-            )
+          enriched: () => db.from("sos_events")
+            .select("id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, sensor_state, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at")
+            .neq("source", "demo")
             .order("created_at", { ascending: false })
             .limit(100),
-          legacy: () => db
-            .from("sos_events")
-            .select(
-              "id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
-            )
+          legacy: () => db.from("sos_events")
+            .select("id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at")
+            .neq("source", "demo")
             .order("created_at", { ascending: false })
             .limit(100),
           adaptLegacy: (rows) => (rows || []).map((row) => ({
@@ -67,28 +61,39 @@ export const GET = withRequestContext(
             "id, sos_event_id, phone_number, provider, status, provider_reference, error_message, created_at",
           )
           .order("created_at", { ascending: false })
+          .not("provider", "in", "(demo,whatsapp_demo)")
           .limit(200),
         db
           .from("locations")
-          .select("trekker_id, latitude, longitude, accuracy_meters, captured_at")
+          .select("trekker_id, latitude, longitude, accuracy_meters, captured_at, source")
+          .neq("source", "demo")
           .order("captured_at", { ascending: false })
           .limit(500),
         withHardwareSchemaFallback({
-          enriched: () => db
-            .from("sensor_readings")
-            .select(
-              "trekker_id, device_id, heart_rate, spo2, altitude, temperature, sensor_state, captured_at",
-            )
+          enriched: () => db.from("sensor_readings")
+            .select("trekker_id, device_id, heart_rate, spo2, altitude, temperature, pressure, start_altitude, current_altitude, average_speed, distance, ams_status, fall_detected, fall_type, sos_countdown, sos_active, sensor_state, captured_at, request_id")
+            .not("request_id", "like", "argus-demo-reading-%")
             .order("captured_at", { ascending: false })
             .limit(500),
-          legacy: () => db
-            .from("sensor_readings")
-            .select(
-              "trekker_id, device_id, heart_rate, spo2, altitude, temperature, captured_at",
-            )
+          legacy: () => db.from("sensor_readings")
+            .select("trekker_id, device_id, heart_rate, spo2, altitude, temperature, captured_at, request_id")
+            .not("request_id", "like", "argus-demo-reading-%")
             .order("captured_at", { ascending: false })
             .limit(500),
-          adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: "valid" })),
+          adaptLegacy: (rows) => (rows || []).map((row) => ({
+            ...row,
+            pressure: null,
+            start_altitude: null,
+            current_altitude: null,
+            average_speed: null,
+            distance: null,
+            ams_status: null,
+            fall_detected: null,
+            fall_type: null,
+            sos_countdown: null,
+            sos_active: null,
+            sensor_state: null,
+          })),
           context,
           operation: "load authority sensor readings",
           table: "sensor_readings",
@@ -147,6 +152,8 @@ export const GET = withRequestContext(
       freshness: {
         locationSeconds: env.locationStaleSeconds,
         readingSeconds: env.readingStaleSeconds,
+        deviceOnlineSeconds: env.deviceOnlineSeconds,
+        deviceOfflineSeconds: env.deviceOfflineSeconds,
       },
       trekkers: (trekkers.data || []).map((row) => {
         const location = latestLocation.get(row.id);
@@ -192,6 +199,16 @@ export const GET = withRequestContext(
                 altitude:
                   reading.altitude == null ? null : Number(reading.altitude),
                 temperature: reading.temperature == null ? null : Number(reading.temperature),
+                pressure: reading.pressure == null ? null : Number(reading.pressure),
+                startAltitude: reading.start_altitude == null ? null : Number(reading.start_altitude),
+                currentAltitude: reading.current_altitude == null ? null : Number(reading.current_altitude),
+                averageSpeed: reading.average_speed == null ? null : Number(reading.average_speed),
+                distance: reading.distance == null ? null : Number(reading.distance),
+                amsStatus: reading.ams_status,
+                fallDetected: reading.fall_detected == null ? null : Boolean(reading.fall_detected),
+                fallType: reading.fall_type,
+                sosCountdown: reading.sos_countdown == null ? null : Boolean(reading.sos_countdown),
+                physicalSos: reading.sos_active == null ? null : Boolean(reading.sos_active),
                 capturedAt: reading.captured_at,
                 ageSeconds: ageSeconds(reading.captured_at),
               }
@@ -214,6 +231,16 @@ export const GET = withRequestContext(
               sensorState: item.sensor_state,
               altitude: item.altitude == null ? null : Number(item.altitude),
               temperature: item.temperature == null ? null : Number(item.temperature),
+              pressure: item.pressure == null ? null : Number(item.pressure),
+              startAltitude: item.start_altitude == null ? null : Number(item.start_altitude),
+              currentAltitude: item.current_altitude == null ? null : Number(item.current_altitude),
+              averageSpeed: item.average_speed == null ? null : Number(item.average_speed),
+              distance: item.distance == null ? null : Number(item.distance),
+              amsStatus: item.ams_status,
+              fallDetected: item.fall_detected == null ? null : Boolean(item.fall_detected),
+              fallType: item.fall_type,
+              sosCountdown: item.sos_countdown == null ? null : Boolean(item.sos_countdown),
+              physicalSos: item.sos_active == null ? null : Boolean(item.sos_active),
               capturedAt: item.captured_at,
               ageSeconds: ageSeconds(item.captured_at),
             })),

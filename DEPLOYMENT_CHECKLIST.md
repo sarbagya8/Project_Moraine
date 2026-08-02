@@ -3,7 +3,9 @@
 ## Code and database
 
 - [ ] Back up the Supabase project.
-- [ ] Apply missing migrations `001` through `013` in order.
+- [ ] Apply missing migrations `001` through `015` in order, or apply the idempotent `015` convergence migration to an existing project.
+- [ ] Run `npm run db:check` and require every probe to pass.
+- [ ] Review `supabase/cleanup/preview_demo_test_rows.sql`; run cleanup only after backup and approval.
 - [ ] Use `npm run seed:demo` only in a local or non-production hackathon environment.
 - [ ] Confirm RLS is enabled and direct `anon`/`authenticated` access is revoked.
 - [ ] Run `npm run verify`.
@@ -18,8 +20,7 @@
 - [ ] random `SESSION_SECRET` of at least 32 characters
 - [ ] `SESSION_MAX_AGE_SECONDS` or the 8-hour default
 - [ ] every required WhatsApp and Meta variable
-- [ ] `DEMO_MODE=true` for initial deployment
-- [ ] `DEMO_MODE=false` only after the fixed-recipient smoke test succeeds
+- [ ] `DEMO_MODE=false` for physical-device and production runs
 
 ## Functional checks
 
@@ -45,6 +46,7 @@
 - [ ] use a supported Chromium browser over HTTPS or localhost
 - [ ] verify BLE identity, phone GPS permission, readings, and an 800 ms physical SOS hold
 - [ ] test BLE disconnect, denied GPS, internet loss, SOS queue retry, and phone battery use
+- [ ] confirm device changes online → stale → offline using the configured thresholds
 - [ ] keep a manual emergency method
 
 ## Before real-world use

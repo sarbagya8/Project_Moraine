@@ -38,7 +38,7 @@ type LatestValidReading = {
   spo2: number | null;
   altitude: number | null;
   temperature: number | null;
-  sensor_state: string;
+  sensor_state: string | null;
   captured_at: string;
 };
 
@@ -335,7 +335,7 @@ export async function processSos(
         .order("captured_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      adaptLegacy: (row) => row ? { ...row, sensor_state: "valid" } : null,
+      adaptLegacy: (row) => row ? { ...row, sensor_state: null } : null,
       context,
       operation: "load latest valid SOS reading",
       table: "sensor_readings",
@@ -355,7 +355,7 @@ export async function processSos(
         .order("captured_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      adaptLegacy: (row) => row ? { ...row, sensor_state: "valid" } : null,
+      adaptLegacy: (row) => row ? { ...row, sensor_state: null } : null,
       context,
       operation: "load latest SOS sensor state",
       table: "sensor_readings",
