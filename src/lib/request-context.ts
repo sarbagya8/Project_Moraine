@@ -23,6 +23,28 @@ function getRequestId(request: Request) {
   return supplied && SAFE_REQUEST_ID.test(supplied) ? supplied : randomUUID();
 }
 
+function stringifyPayload(payload: Record<string, unknown>) {
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
+}
+
+export function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return {
+    name: "UnknownError",
+    message: String(error),
+  };
+}
+
 function log(
   level: "info" | "warn" | "error",
   context: RequestContext,
@@ -38,10 +60,11 @@ function log(
     elapsedMs: Date.now() - context.startedAt,
     ...details,
   };
+  const line = stringifyPayload(payload);
 
-  if (level === "error") console.error(payload);
-  else if (level === "warn") console.warn(payload);
-  else console.info(payload);
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.info(line);
 }
 
 export function logInfo(
@@ -89,7 +112,7 @@ export function withRequestContext<TContext = StaticRouteContext>(
       return response;
     } catch (error) {
       logError(context, "request.unhandled_error", {
-        errorName: error instanceof Error ? error.name : "UnknownError",
+        ...serializeError(error),
       });
       const response = failure(
         "INTERNAL_ERROR",

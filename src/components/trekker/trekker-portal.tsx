@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   idempotencyHeaders,
   portalRequest,
+  type TrekkerEmergency,
   type TrekkerOverview,
 } from "@/lib/portal-api";
 import {
@@ -39,24 +40,28 @@ const symptomOptions = [
 
 export function TrekkerPortal() {
   const sosRequestId = useRef<string | null>(null);
+  const sosSubmissionInFlight = useRef(false);
   const router = useRouter();
   const [data, setData] = useState<TrekkerOverview | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [confirmingSos, setConfirmingSos] = useState(false);
-  const [sendingSos, setSendingSos] = useState(false);
-  const [sosResult, setSosResult] = useState<{
-    id: string;
-    createdAt: string;
-    notificationStatus: string;
-    locationIsStale: boolean;
-    rescueUrl?: string;
-  } | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [reportingSymptom, setReportingSymptom] = useState(false);
+  const [sharingLocation, setSharingLocation] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isActivatingSos, setIsActivatingSos] = useState(false);
+  const [activeSos, setActiveSos] = useState<TrekkerEmergency | null>(null);
+  const [sosError, setSosError] = useState("");
+  const [sosResult, setSosResult] = useState<TrekkerEmergency | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setData(await portalRequest<TrekkerOverview>("/api/trekker/me"));
+      const overview = await portalRequest<TrekkerOverview>("/api/trekker/me");
+      setData(overview);
+      setActiveSos(
+        overview.emergencies.find((event) => event.status !== "resolved") ?? null,
+      );
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Your safety data is unavailable.");
@@ -77,13 +82,21 @@ export function TrekkerPortal() {
   }, [load]);
 
   async function logout() {
-    await portalRequest("/api/auth/logout", { method: "POST" });
-    router.replace("/trekker/login");
-    router.refresh();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await portalRequest("/api/auth/logout", { method: "POST" });
+      router.replace("/trekker/login");
+      router.refresh();
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Logout could not be completed.");
+      setLoggingOut(false);
+    }
   }
 
   async function reportSymptom(formData: FormData) {
-    if (!data) return;
+    if (!data || reportingSymptom) return;
+    setReportingSymptom(true);
     setMessage("Sending your report…");
     try {
       await portalRequest("/api/symptoms", {
@@ -100,14 +113,17 @@ export function TrekkerPortal() {
       await load();
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Your report could not be sent.");
+    } finally {
+      setReportingSymptom(false);
     }
   }
 
   async function shareLocation() {
-    if (!data || !navigator.geolocation) {
+    if (!data || !navigator.geolocation || sharingLocation) {
       setMessage("Location sharing is unavailable in this browser.");
       return;
     }
+    setSharingLocation(true);
     setMessage("Getting your location…");
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -129,27 +145,44 @@ export function TrekkerPortal() {
           await load();
         } catch (reason) {
           setMessage(reason instanceof Error ? reason.message : "Location could not be shared.");
+        } finally {
+          setSharingLocation(false);
         }
       },
-      () => setMessage("Location permission was denied or no GPS fix was available."),
+      () => {
+        setMessage("Location permission was denied or no GPS fix was available.");
+        setSharingLocation(false);
+      },
       { enableHighAccuracy: true, timeout: 12_000, maximumAge: 10_000 },
     );
   }
 
+  function openSosConfirmation() {
+    if (activeSos || isActivatingSos || sosSubmissionInFlight.current) return;
+    sosRequestId.current = crypto.randomUUID();
+    setSosError("");
+    setIsConfirmModalOpen(true);
+  }
+
+  function closeSosConfirmation() {
+    if (isActivatingSos || sosSubmissionInFlight.current) return;
+    sosRequestId.current = null;
+    setSosError("");
+    setIsConfirmModalOpen(false);
+  }
+
   async function activateSos() {
-    if (!data || sendingSos) return;
-    setSendingSos(true);
+    if (!data || activeSos || isActivatingSos || sosSubmissionInFlight.current) return;
+    sosSubmissionInFlight.current = true;
+    setIsActivatingSos(true);
+    setSosError("");
     setMessage("");
     try {
       sosRequestId.current ??= crypto.randomUUID();
       const result = await portalRequest<{
-        event: {
-          id: string;
-          createdAt: string;
-          notificationStatus: string;
-          locationIsStale: boolean;
-          rescueUrl?: string;
-        };
+        created: boolean;
+        sos: TrekkerEmergency;
+        notificationStatus: string;
       }>("/api/sos", {
         method: "POST",
         headers: idempotencyHeaders(sosRequestId.current),
@@ -158,15 +191,34 @@ export function TrekkerPortal() {
           source: "web_button",
         }),
       });
-      setSosResult(result.event);
+      const confirmedSos = {
+        ...result.sos,
+        notificationStatus: result.notificationStatus,
+      };
+      setActiveSos(confirmedSos);
+      setSosResult(confirmedSos);
+      setData((current) => current ? {
+        ...current,
+        emergencies: [
+          confirmedSos,
+          ...current.emergencies.filter((event) => event.id !== confirmedSos.id),
+        ],
+      } : current);
       sosRequestId.current = null;
-      setConfirmingSos(false);
-      setMessage("Emergency alert sent.");
-      await load();
+      setIsConfirmModalOpen(false);
+      setMessage(
+        result.notificationStatus === "sent"
+          ? "Emergency activated and WhatsApp alert sent."
+          : result.notificationStatus === "failed"
+            ? "Emergency activated, but the WhatsApp alert failed. Authorities can retry it."
+            : "Emergency activated.",
+      );
+      void load();
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "The SOS could not be activated.");
+      setSosError(reason instanceof Error ? reason.message : "The SOS could not be activated.");
     } finally {
-      setSendingSos(false);
+      sosSubmissionInFlight.current = false;
+      setIsActivatingSos(false);
     }
   }
 
@@ -180,7 +232,7 @@ export function TrekkerPortal() {
   const readingStale =
     !data.latestReading ||
     (data.latestReading.ageSeconds || 0) > data.freshness.readingSeconds;
-  const activeSos = data.emergencies.find((event) => event.status !== "resolved");
+  const displayedSos = sosResult ?? activeSos;
   const state = data.device?.isActive
     ? data.device.lastSeenAt &&
       new Date(data.generatedAt).getTime() -
@@ -196,7 +248,7 @@ export function TrekkerPortal() {
         <Link href="/" className="brand">ARGUS</Link>
         <div>
           <button className="secondary-button" onClick={() => void load()}>Refresh</button>
-          <button className="secondary-button" onClick={() => void logout()}>Logout</button>
+          <button className="secondary-button" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? "Logging out…" : "Logout"}</button>
         </div>
       </nav>
       <header className="trekker-header">
@@ -212,17 +264,17 @@ export function TrekkerPortal() {
       {message ? <div className="form-message" aria-live="polite">{message}</div> : null}
 
       <DeviceConnectionPanel
-        trekkerId={data.trekker.id}
         deviceId={data.device?.id ?? null}
+        locationStaleSeconds={data.freshness.locationSeconds}
       />
 
       <section>
         <div className="section-heading"><div><p className="eyebrow">Current safety status</p><h2>Your latest information</h2></div></div>
         <div className="summary-grid">
           <DataCard label="Device" value={<StatusBadge value={state} />} detail={data.device ? `${data.device.id} · last seen ${relativeAge(data.device.lastSeenAt)}` : "No device assigned"} />
-          <DataCard label="Heart rate" value={data.latestReading ? `${data.latestReading.heartRate} bpm` : "Unavailable"} detail={readingStale ? `Last reading was received ${relativeAge(data.latestReading?.capturedAt)}` : "Recent reading"} />
-          <DataCard label="SpO₂" value={data.latestReading ? `${data.latestReading.spo2}%` : "Unavailable"} />
-          <DataCard label="Temperature" value={data.latestReading?.temperature == null ? "Unavailable" : `${data.latestReading.temperature} °C`} />
+          <DataCard label="Stored heart rate" value={data.latestReading?.heartRate == null ? "Unavailable" : `${data.latestReading.heartRate} bpm`} detail={readingStale ? `Stale database reading from ${relativeAge(data.latestReading?.capturedAt)}` : "Recent database reading"} />
+          <DataCard label="Stored SpO₂" value={data.latestReading?.spo2 == null ? "Unavailable" : `${data.latestReading.spo2}%`} detail="Latest persisted reading; live BLE values appear in the wristband panel above." />
+          <DataCard label="Ambient temperature" value={data.latestReading?.temperature == null ? "Unavailable" : `${data.latestReading.temperature} °C`} />
           <DataCard label="Altitude" value={data.latestReading?.altitude == null ? "Unavailable" : `${data.latestReading.altitude} m`} />
           <DataCard label="Location" value={<StatusBadge value={!data.latestLocation ? "unavailable" : locationStale ? "stale" : "recent"} />} detail={relativeAge(data.latestLocation?.capturedAt)} />
         </div>
@@ -230,7 +282,7 @@ export function TrekkerPortal() {
 
       <section className="content-grid">
         <article className="panel">
-          <div className="section-heading"><div><p className="eyebrow">Your location</p><h2>Latest GPS position</h2></div><button className="secondary-button" onClick={() => void shareLocation()}>Share current location</button></div>
+          <div className="section-heading"><div><p className="eyebrow">Your location</p><h2>Latest GPS position</h2></div><button className="secondary-button" disabled={sharingLocation} onClick={() => void shareLocation()}>{sharingLocation ? "Sharing location…" : "Share current location"}</button></div>
           <SafetyMap
             points={data.latestLocation ? [{
               id: data.trekker.id,
@@ -264,7 +316,7 @@ export function TrekkerPortal() {
             <label>Symptom<select name="symptom" required>{symptomOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
             <label>Severity<select name="severity" required defaultValue="unspecified"><option value="mild">Mild</option><option value="moderate">Moderate</option><option value="severe">Severe</option><option value="unspecified">Not sure</option></select></label>
             <label>Optional note<textarea name="notes" maxLength={500} rows={3} placeholder="Add useful context for the rescue team" /></label>
-            <button className="primary-button" type="submit">Send report</button>
+            <button className="primary-button" type="submit" disabled={reportingSymptom}>{reportingSymptom ? "Sending report…" : "Send report"}</button>
           </form>
         </article>
       </section>
@@ -278,22 +330,27 @@ export function TrekkerPortal() {
           <p className="eyebrow">Emergency assistance</p>
           <h2>{activeSos ? "SOS is active" : "Activate an emergency alert"}</h2>
           <p>{activeSos ? `Tracking ID: ${activeSos.id}. Notification state: ${activeSos.notificationStatus}.` : "ARGUS will create an emergency snapshot and alert configured trusted contacts. Contact local emergency services when possible."}</p>
-          {sosResult ? <dl className="compact-details"><div><dt>Tracking ID</dt><dd>{sosResult.id}</dd></div><div><dt>Created</dt><dd>{formatTime(sosResult.createdAt)}</dd></div><div><dt>Notification</dt><dd>{sosResult.notificationStatus}</dd></div><div><dt>Location</dt><dd>{sosResult.locationIsStale ? "Stale or unavailable" : "Recent"}</dd></div></dl> : null}
+          {displayedSos ? <dl className="compact-details"><div><dt>Tracking ID</dt><dd>{displayedSos.id}</dd></div><div><dt>Created</dt><dd>{formatTime(displayedSos.createdAt)}</dd></div><div><dt>Notification</dt><dd>{displayedSos.notificationStatus}</dd></div><div><dt>Location</dt><dd>{displayedSos.locationIsStale ? "Stale or unavailable" : "Recent"}</dd></div></dl> : null}
         </div>
-        <button className="sos-button" type="button" disabled={Boolean(activeSos) || sendingSos} onClick={() => setConfirmingSos(true)}>
-          {activeSos ? "SOS ACTIVE" : "ACTIVATE SOS"}
-        </button>
+        {activeSos ? (
+          <div className="sos-button" role="status" aria-live="polite">SOS ACTIVE</div>
+        ) : (
+          <button className="sos-button" type="button" disabled={isActivatingSos} onClick={openSosConfirmation}>
+            ACTIVATE SOS
+          </button>
+        )}
       </section>
 
-      {confirmingSos ? (
-        <div className="dialog-backdrop" role="presentation" onMouseDown={() => !sendingSos && setConfirmingSos(false)}>
+      {isConfirmModalOpen ? (
+        <div className="dialog-backdrop" role="presentation" onMouseDown={closeSosConfirmation}>
           <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-sos-title" onMouseDown={(event) => event.stopPropagation()}>
             <p className="eyebrow">Confirm emergency</p>
             <h2 id="confirm-sos-title">Activate SOS now?</h2>
             <p>This will create an emergency record, preserve your latest available GPS and sensor data, and send configured WhatsApp alerts. Only continue for a real emergency or an authorized test.</p>
+            {sosError ? <div className="inline-warning" role="alert">{sosError}</div> : null}
             <div className="button-row">
-              <button className="secondary-button" disabled={sendingSos} onClick={() => setConfirmingSos(false)}>Cancel</button>
-              <button className="danger-button" disabled={sendingSos} onClick={() => void activateSos()}>{sendingSos ? "Sending SOS…" : "Confirm and activate SOS"}</button>
+              <button className="secondary-button" type="button" disabled={isActivatingSos} onClick={closeSosConfirmation}>Cancel</button>
+              <button className="danger-button" type="button" disabled={isActivatingSos || Boolean(activeSos)} onClick={() => void activateSos()}>{isActivatingSos ? "Activating SOS…" : activeSos ? "SOS is already active" : "Confirm and activate SOS"}</button>
             </div>
           </section>
         </div>

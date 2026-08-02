@@ -1,4 +1,4 @@
-import { isAdminAuthorized } from "@/lib/api-auth";
+import { authorityAccessError } from "@/lib/api-auth";
 import { failure, success } from "@/lib/api-response";
 import { env } from "@/lib/env";
 import { maskPhone } from "@/lib/phone";
@@ -23,26 +23,14 @@ export const POST = withRequestContext(
         429,
       );
     }
-    if (!env.administrativeAuthConfigured) {
-      return failure(
-        "ADMIN_AUTH_NOT_CONFIGURED",
-        "Set ADMIN_API_KEY before testing WhatsApp.",
-        503,
-      );
-    }
-    if (!isAdminAuthorized(request)) {
-      return failure(
-        "UNAUTHORIZED_ADMIN",
-        "A valid administrative API key is required.",
-        401,
-      );
-    }
+    const authError = authorityAccessError(request);
+    if (authError) return authError;
 
-    const recipient = normalizeWhatsAppRecipient(env.whatsappTestRecipient);
+    const recipient = normalizeWhatsAppRecipient(env.whatsappRecipientNumber);
     if (!recipient) {
       return failure(
-        "WHATSAPP_TEST_RECIPIENT_NOT_CONFIGURED",
-        "WHATSAPP_TEST_RECIPIENT is missing or invalid.",
+        "WHATSAPP_RECIPIENT_NUMBER_NOT_CONFIGURED",
+        "WHATSAPP_RECIPIENT_NUMBER is missing or invalid.",
         503,
       );
     }

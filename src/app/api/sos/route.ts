@@ -1,15 +1,14 @@
 import {
-  isAdminAuthorized,
-  isDeviceAuthorized,
-  isTrekkerAuthorized,
+  authorityAccessError,
+  trekkerAccessError,
 } from "@/lib/api-auth";
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
 import { SAFETY_DISCLAIMER } from "@/lib/disclaimer";
 import { env } from "@/lib/env";
-import { idempotencyKey, suppliedIdempotencyKey } from "@/lib/idempotency";
+import { idempotencyKey } from "@/lib/idempotency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { databaseError, zodDetails, zodMessage } from "@/lib/api-route-support";
-import { withRequestContext } from "@/lib/request-context";
+import { logInfo, withRequestContext } from "@/lib/request-context";
 import { processSos, SosWorkflowError } from "@/lib/sos-service";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { sosSchema } from "@/lib/validation/sos-schema";
@@ -18,55 +17,20 @@ export const runtime = "nodejs";
 
 function authorizationError(request: Request, source: string) {
   if (source === "physical_button") {
-    if (!env.deviceApiKeyConfigured) {
-      return failure(
-        "DEVICE_AUTH_NOT_CONFIGURED",
-        "Device authentication is not configured.",
-        503,
-      );
-    }
-    if (!isDeviceAuthorized(request)) {
-      return failure(
-        "UNAUTHORIZED_DEVICE",
-        "A valid device API key is required for physical SOS requests.",
-        401,
-      );
-    }
-    if (!suppliedIdempotencyKey(request)) {
-      return failure(
-        "IDEMPOTENCY_KEY_REQUIRED",
-        "A valid x-idempotency-key header is required for physical SOS requests.",
-        400,
-      );
-    }
+    return failure(
+      "USE_TREKKER_DEVICE_BRIDGE",
+      "Physical ARGUS SOS events must use the authenticated device bridge.",
+      410,
+    );
   }
   if (source === "manual") {
-    if (!env.administrativeAuthConfigured) {
-      return failure(
-        "ADMIN_AUTH_NOT_CONFIGURED",
-        "Administrative authentication is not configured.",
-        503,
-      );
-    }
-    if (!isAdminAuthorized(request)) {
-      return failure(
-        "UNAUTHORIZED_ADMIN",
-        "A valid administrative API key is required.",
-        401,
-      );
-    }
+    return authorityAccessError(request);
   }
   if (source === "demo") {
     if (!env.demoMode) {
       return failure("DEMO_MODE_DISABLED", "Demo SOS requests are disabled.", 403);
     }
-    if (!isAdminAuthorized(request)) {
-      return failure(
-        "UNAUTHORIZED_ADMIN",
-        "Authority access is required for demo SOS requests.",
-        401,
-      );
-    }
+    return authorityAccessError(request);
   }
   return null;
 }
@@ -101,27 +65,32 @@ export const POST = withRequestContext(
     }
     const authError = authorizationError(request, input.data.source);
     if (authError) return authError;
-    if (
-      input.data.source === "web_button" &&
-      !isTrekkerAuthorized(request, input.data.trekkerId)
-    ) {
-      return failure(
-        "UNAUTHORIZED_TREKKER",
-        "You may activate a web SOS only for your own profile.",
-        401,
-      );
+    if (input.data.source === "web_button") {
+      const trekkerError = trekkerAccessError(request, input.data.trekkerId);
+      if (trekkerError) return trekkerError;
     }
 
     try {
+      const requestId = idempotencyKey(request, context.requestId);
+      logInfo(context, "sos.confirmation_received", {
+        idempotencyKey: requestId,
+        trekkerId: input.data.trekkerId,
+      });
       const result = await processSos(
         getSupabaseServer(),
         input.data,
-        idempotencyKey(request, context.requestId),
+        requestId,
         context,
       );
       return success(
         {
           ...result,
+          created: !result.duplicate,
+          sos: {
+            ...result.event,
+            trekkerId: input.data.trekkerId,
+          },
+          notificationStatus: result.event.notificationStatus,
           demoMode: env.demoMode,
           disclaimer: SAFETY_DISCLAIMER,
         },

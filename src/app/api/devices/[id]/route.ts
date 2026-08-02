@@ -1,6 +1,7 @@
-import { isAdminAuthorized } from "@/lib/api-auth";
+import { authorityAccessError } from "@/lib/api-auth";
 import { failure, readJson, success } from "@/lib/api-response";
 import { createPairingCode, hashPairingCode } from "@/lib/portal-auth";
+import { databaseError } from "@/lib/api-route-support";
 import { withRequestContext } from "@/lib/request-context";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -8,11 +9,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export const PATCH = withRequestContext<RouteContext>(
   "/api/devices/[id]",
-  async (request, context) => {
-  if (!isAdminAuthorized(request)) {
-    return failure("UNAUTHORIZED_ADMIN", "Authority access is required.", 401);
-  }
-  const { id } = await context.params;
+  async (request, routeContext, context) => {
+  const authError = authorityAccessError(request);
+  if (authError) return authError;
+  const { id } = await routeContext.params;
   const parsed = await readJson(request);
   if (parsed.error) return parsed.error;
   const body = parsed.data as Record<string, unknown>;
@@ -57,8 +57,8 @@ export const PATCH = withRequestContext<RouteContext>(
           }
         : {}),
     });
-  } catch {
-    return failure("DATABASE_ERROR", "The device could not be updated.", 409);
+  } catch (error) {
+    return databaseError(error, context, { name: "update device", table: "devices" });
   }
   },
 );

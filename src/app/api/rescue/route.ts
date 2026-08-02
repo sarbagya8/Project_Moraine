@@ -1,6 +1,6 @@
-import { isAdminAuthorized } from "@/lib/api-auth";
+import { authorityAccessError } from "@/lib/api-auth";
 import { failure, success, validationFailure } from "@/lib/api-response";
-import { env } from "@/lib/env";
+import { withHardwareSchemaFallback } from "@/lib/database-schema";
 import { ageSeconds } from "@/lib/map-links";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { databaseError, zodDetails, zodMessage } from "@/lib/api-route-support";
@@ -10,6 +10,40 @@ import { rescueListQuerySchema } from "@/lib/validation/query-schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+type RescueListEvent = {
+  id: string;
+  trekker_id: string;
+  device_id: string | null;
+  hardware_event_id: string | null;
+  source: string;
+  status: string;
+  sms_status: string;
+  severity_score: number | null;
+  severity_label: string | null;
+  severity_data_status: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_accuracy: number | null;
+  location_captured_at: string | null;
+  location_is_stale: boolean;
+  heart_rate: number | null;
+  spo2: number | null;
+  altitude: number | null;
+  temperature: number | null;
+  sensor_state: string | null;
+  reading_captured_at: string | null;
+  reading_is_stale: boolean;
+  symptom: string | null;
+  map_url: string | null;
+  rescue_url: string | null;
+  created_at: string;
+};
+
+type LegacyRescueListEvent = Omit<
+  RescueListEvent,
+  "device_id" | "hardware_event_id" | "sensor_state"
+>;
 
 export const GET = withRequestContext(
   "/api/rescue",
@@ -22,20 +56,8 @@ export const GET = withRequestContext(
         429,
       );
     }
-    if (!env.administrativeAuthConfigured) {
-      return failure(
-        "ADMIN_AUTH_NOT_CONFIGURED",
-        "Administrative authentication is not configured.",
-        503,
-      );
-    }
-    if (!isAdminAuthorized(request)) {
-      return failure(
-        "UNAUTHORIZED_ADMIN",
-        "A valid administrative API key is required.",
-        401,
-      );
-    }
+    const authError = authorityAccessError(request);
+    if (authError) return authError;
 
     const url = new URL(request.url);
     const input = rescueListQuerySchema.safeParse({
@@ -48,18 +70,44 @@ export const GET = withRequestContext(
 
     try {
       const db = getSupabaseServer();
-      let query = db
-        .from("sos_events")
-        .select(
-          "id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, map_url, rescue_url, created_at",
-        )
-        .order("created_at", { ascending: false })
-        .limit(input.data.limit);
-      if (input.data.status) query = query.eq("status", input.data.status);
-      const { data: events, error } = await query;
-      if (error) throw error;
+      const enrichedEventQuery = () => {
+        let query = db
+          .from("sos_events")
+          .select("id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, sensor_state, reading_captured_at, reading_is_stale, symptom, map_url, rescue_url, created_at");
+        if (input.data.status) query = query.eq("status", input.data.status);
+        return query
+          .order("created_at", { ascending: false })
+          .limit(input.data.limit)
+          .returns<RescueListEvent[]>();
+      };
+      const legacyEventQuery = () => {
+        let query = db
+          .from("sos_events")
+          .select("id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, map_url, rescue_url, created_at");
+        if (input.data.status) query = query.eq("status", input.data.status);
+        return query
+          .order("created_at", { ascending: false })
+          .limit(input.data.limit)
+          .returns<LegacyRescueListEvent[]>();
+      };
+      const eventResult = await withHardwareSchemaFallback<
+        RescueListEvent[],
+        LegacyRescueListEvent[]
+      >({
+        enriched: enrichedEventQuery,
+        legacy: legacyEventQuery,
+        adaptLegacy: (rows) => (rows || []).map((event) => ({
+          ...event,
+          device_id: null,
+          hardware_event_id: null,
+          sensor_state: null,
+        })),
+        context,
+        operation: "load rescue events",
+        table: "sos_events",
+      });
 
-      const eventRows = events ?? [];
+      const eventRows = eventResult.data ?? [];
       const trekkerIds = [...new Set(eventRows.map((event) => event.trekker_id))];
       const eventIds = eventRows.map((event) => event.id);
       const [trekkerResult, attemptResult] = await Promise.all([
@@ -84,6 +132,7 @@ export const GET = withRequestContext(
       );
 
       return success({
+        hardwareSchemaReady: eventResult.hardwareSchemaReady,
         events: eventRows.map((event) => {
           const trekker = trekkerById.get(event.trekker_id);
           return {
@@ -95,6 +144,8 @@ export const GET = withRequestContext(
             severityLabel: event.severity_label,
             severityDataStatus: event.severity_data_status,
             source: event.source,
+            deviceId: event.device_id,
+            hardwareEventId: event.hardware_event_id,
             status: event.status,
             notificationStatus: event.sms_status,
             symptom: event.symptom,
@@ -114,6 +165,7 @@ export const GET = withRequestContext(
                     spo2: event.spo2,
                     altitude: event.altitude,
                     temperature: event.temperature,
+                    sensorState: event.sensor_state,
                     capturedAt: event.reading_captured_at,
                     isStale: event.reading_is_stale,
                   },
@@ -131,7 +183,7 @@ export const GET = withRequestContext(
         }),
       });
     } catch (error) {
-      return databaseError(error, context);
+      return databaseError(error, context, { name: "load rescue list", table: "sos_events" });
     }
   },
 );

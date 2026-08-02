@@ -37,12 +37,8 @@ export function calculateSeverity(input: SeverityInput) {
     if (input.spo2 < 90) score += 15;
     else if (input.spo2 < 94) score += 8;
   }
-  if (
-    input.temperature != null &&
-    (input.temperature < 35 || input.temperature > 39)
-  ) {
-    score += 10;
-  }
+  // ARGUS receives BMP280 ambient temperature. It is deliberately excluded
+  // from health-risk scoring and must never be treated as body temperature.
 
   const severityScore = Math.min(100, score);
   const label: SeverityLabel =
@@ -80,6 +76,7 @@ export function locationStatus(
 export function buildSosMessage(input: {
   name: string;
   trekkerId: string;
+  deviceId?: string;
   severityLabel: SeverityLabel;
   severityScore: number;
   route: string;
@@ -89,6 +86,7 @@ export function buildSosMessage(input: {
   temperature: string;
   altitude: string;
   symptom: string;
+  sensorState?: string;
   locationStatus: string;
   trackingId: string;
   mapUrl: string;
@@ -99,14 +97,16 @@ export function buildSosMessage(input: {
     "",
     `Name: ${input.name}`,
     `Trekker ID: ${input.trekkerId}`,
+    `Device ID: ${input.deviceId || "unavailable"}`,
     `Severity: ${input.severityLabel} (${input.severityScore}/100)`,
     `Route: ${input.route}`,
     `Time: ${input.emergencyTime}`,
     `Heart rate: ${input.heartRate}`,
     `SpO2: ${input.spo2}`,
-    `Temperature: ${input.temperature}`,
+    `Ambient temperature: ${input.temperature}`,
     `Altitude: ${input.altitude}`,
     `Symptom: ${input.symptom}`,
+    `Sensor state: ${input.sensorState || "unavailable"}`,
     `Location status: ${input.locationStatus}`,
     `Tracking ID: ${input.trackingId}`,
     `Map: ${input.mapUrl}`,

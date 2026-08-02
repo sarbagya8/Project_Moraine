@@ -1,6 +1,12 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { env } from "./env";
+import {
+  insertSensorReadingCompatible,
+  isHardwareMigrationError,
+  updateWithHardwareSchemaFallback,
+  withHardwareSchemaFallback,
+} from "./database-schema";
 import type { NotificationResult } from "./notification";
 import { aggregateNotificationStatus } from "./notification";
 import { ageSeconds } from "./map-links";
@@ -14,7 +20,7 @@ import {
 } from "./sos-rules";
 import type { sosSchema } from "./validation/sos-schema";
 import {
-  normalizeWhatsAppRecipient,
+  configuredWhatsAppRecipient,
   sendWhatsAppSosAlert,
   type SosTemplateValues,
 } from "./whatsapp";
@@ -26,6 +32,19 @@ type RpcRow = {
   event_id: string;
   is_duplicate: boolean;
 };
+
+type LatestValidReading = {
+  heart_rate: number | null;
+  spo2: number | null;
+  altitude: number | null;
+  temperature: number | null;
+  sensor_state: string;
+  captured_at: string;
+};
+
+type LegacyLatestValidReading = Omit<LatestValidReading, "sensor_state">;
+type LatestSensorState = Pick<LatestValidReading, "sensor_state" | "captured_at">;
+type LegacyLatestSensorState = Pick<LatestValidReading, "captured_at">;
 
 export class SosWorkflowError extends Error {
   constructor(
@@ -46,9 +65,6 @@ async function nonAtomicDevelopmentFallback(
     requestId: string;
   },
 ) {
-  const cutoff = new Date(
-    Date.now() - input.cooldownSeconds * 1_000,
-  ).toISOString();
   const { data: byRequest, error: requestError } = await db
     .from("sos_events")
     .select("id")
@@ -62,7 +78,6 @@ async function nonAtomicDevelopmentFallback(
     .select("id")
     .eq("trekker_id", input.trekkerId)
     .in("status", ["active", "acknowledged"])
-    .gte("created_at", cutoff)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
@@ -126,17 +141,32 @@ async function storeInlineTelemetry(
   requestId: string,
 ) {
   if (input.reading) {
-    const { error } = await db.from("sensor_readings").insert({
+    const { error } = await insertSensorReadingCompatible(db, {
       trekker_id: input.trekkerId,
       device_id: input.reading.deviceId,
       heart_rate: input.reading.heartRate,
       spo2: input.reading.spo2,
       altitude: input.reading.altitude ?? null,
       temperature: input.reading.temperature,
+      temperature_kind: input.reading.temperatureType ?? null,
+      sensor_state: input.reading.sensorState,
+      device_uptime_ms: input.reading.deviceCapturedAtMs ?? null,
+      pressure: input.reading.pressure ?? null,
+      start_altitude: input.reading.startAltitude ?? null,
+      current_altitude: input.reading.currentAltitude ?? null,
+      average_speed: input.reading.averageSpeed ?? null,
+      distance: input.reading.distance ?? null,
+      ams_status: input.reading.amsStatus ?? null,
+      fall_detected: input.reading.fallDetected ?? false,
+      fall_type: input.reading.fallType ?? null,
+      sos_countdown: input.reading.sosCountdown ?? false,
+      sos_active: input.reading.sosActive ?? false,
       captured_at: input.reading.capturedAt,
       request_id: `${requestId.slice(0, 90)}:reading`,
     });
-    if (error && error.code !== "23505") throw error;
+    if (error && error.code !== "23505" && !isHardwareMigrationError(error)) {
+      throw error;
+    }
   }
 
   if (input.location) {
@@ -177,24 +207,73 @@ function buildSosMapUrl(latitude: number | null | undefined, longitude: number |
   return `https://maps.google.com/?q=${latitude},${longitude}`;
 }
 
-function notificationAttempt(
-  phoneNumber: string,
-  result: NotificationResult,
-  eventId: string,
-  message: string,
-  requestId: string,
+async function createPendingNotificationAttempt(
+  db: SupabaseClient,
+  input: {
+    phoneNumber: string;
+    eventId: string;
+    message: string;
+    requestId: string;
+  },
 ) {
-  return {
-    sos_event_id: eventId,
-    phone_number: phoneNumber,
+  const { data, error } = await db
+    .from("sms_attempts")
+    .insert({
+      sos_event_id: input.eventId,
+      phone_number: input.phoneNumber,
+      provider: "whatsapp",
+      // `queued` is accepted by both the original and current schemas while
+      // the parent SOS row carries the user-visible in-flight `pending` state.
+      status: "queued",
+      message: input.message,
+      request_id: input.requestId,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (error) throw error;
+  return data.id;
+}
+
+async function finalizeNotificationAttempt(
+  db: SupabaseClient,
+  attemptId: string,
+  result: NotificationResult,
+  context: RequestContext,
+) {
+  const occurredAt = new Date().toISOString();
+  const lifecycleTimestamp =
+    result.status === "sent"
+      ? { sent_at: occurredAt }
+      : result.status === "failed"
+        ? { failed_at: occurredAt }
+        : {};
+  const storedResult = {
     provider: result.provider,
     status: result.status,
-    message,
     provider_reference: result.providerMessageId ?? null,
     provider_response: result.providerSummary ?? null,
     error_message: result.error ?? null,
-    request_id: requestId,
   };
+  let { error } = await db
+    .from("sms_attempts")
+    .update({
+      ...storedResult,
+      ...lifecycleTimestamp,
+    })
+    .eq("id", attemptId);
+  if (error?.code === "42703") {
+    ({ error } = await db
+      .from("sms_attempts")
+      .update(storedResult)
+      .eq("id", attemptId));
+  }
+  if (error) throw error;
+  logInfo(context, "sos.notification_attempt_updated", {
+    notificationAttemptId: attemptId,
+    status: result.status,
+    providerMessageIdStored: Boolean(result.providerMessageId),
+    databaseUpdateSucceeded: true,
+  });
 }
 
 export async function processSos(
@@ -206,15 +285,13 @@ export async function processSos(
   const { data: trekker, error: trekkerError } = await db
     .from("trekkers")
     .select(
-      "id, name, emergency_contact, guide_mobile, route_name, is_active",
+      "id, name, route_name, is_active",
     )
     .eq("id", input.trekkerId)
     .eq("is_active", true)
     .maybeSingle<{
       id: string;
       name: string;
-      emergency_contact: string | null;
-      guide_mobile: string | null;
       route_name: string | null;
       is_active: boolean;
     }>();
@@ -237,18 +314,52 @@ export async function processSos(
     locationQuery = locationQuery.eq("source", "browser");
   }
 
-  const [locationResult, readingResult, symptomResult] = await Promise.all([
+  const [locationResult, readingResult, sensorStateResult, symptomResult] = await Promise.all([
     locationQuery
       .order("captured_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    db
-      .from("sensor_readings")
-      .select("heart_rate, spo2, altitude, temperature, captured_at")
-      .eq("trekker_id", trekker.id)
-      .order("captured_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    withHardwareSchemaFallback<LatestValidReading, LegacyLatestValidReading>({
+      enriched: () => db
+        .from("sensor_readings")
+        .select("heart_rate, spo2, altitude, temperature, sensor_state, captured_at")
+        .eq("trekker_id", trekker.id)
+        .eq("sensor_state", "valid")
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      legacy: () => db
+        .from("sensor_readings")
+        .select("heart_rate, spo2, altitude, temperature, captured_at")
+        .eq("trekker_id", trekker.id)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      adaptLegacy: (row) => row ? { ...row, sensor_state: "valid" } : null,
+      context,
+      operation: "load latest valid SOS reading",
+      table: "sensor_readings",
+    }),
+    withHardwareSchemaFallback<LatestSensorState, LegacyLatestSensorState>({
+      enriched: () => db
+        .from("sensor_readings")
+        .select("sensor_state, captured_at")
+        .eq("trekker_id", trekker.id)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      legacy: () => db
+        .from("sensor_readings")
+        .select("captured_at")
+        .eq("trekker_id", trekker.id)
+        .order("captured_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      adaptLegacy: (row) => row ? { ...row, sensor_state: "valid" } : null,
+      context,
+      operation: "load latest SOS sensor state",
+      table: "sensor_readings",
+    }),
     db
       .from("symptom_reports")
       .select("symptom, severity, notes, created_at")
@@ -258,7 +369,8 @@ export async function processSos(
       .maybeSingle(),
   ]);
   const latestError =
-    locationResult.error || readingResult.error || symptomResult.error;
+    locationResult.error ||
+    symptomResult.error;
   if (latestError) throw latestError;
 
   const atomic = await createSosEventIfAllowed(
@@ -272,6 +384,13 @@ export async function processSos(
     context,
   );
 
+  logInfo(context, "sos.idempotency_resolved", {
+    sosEventId: atomic.eventId,
+    existingActiveSosFound: atomic.duplicate,
+    outcome: atomic.duplicate ? "reused" : "created",
+    idempotencyKey: requestId,
+  });
+
   if (atomic.duplicate) {
     const { data: existing, error } = await db
       .from("sos_events")
@@ -281,6 +400,10 @@ export async function processSos(
       .eq("id", atomic.eventId)
       .single();
     if (error) throw error;
+    logInfo(context, "sos.active_reused", {
+      sosEventId: existing.id,
+      notificationStatus: existing.sms_status,
+    });
     return {
       event: {
         id: existing.id,
@@ -303,13 +426,14 @@ export async function processSos(
 
   const location = locationResult.data;
   const reading = readingResult.data;
+  const latestSensorState = sensorStateResult.data?.sensor_state ?? null;
   const symptomReport = symptomResult.data;
   const locationIsStale = location
     ? ageSeconds(location.captured_at) > env.locationStaleSeconds
-    : false;
+    : true;
   const readingIsStale = reading
     ? ageSeconds(reading.captured_at) > env.readingStaleSeconds
-    : false;
+    : true;
   const severity = calculateSeverity({
     source: input.source,
     symptomSeverity: symptomReport?.severity ?? null,
@@ -332,6 +456,9 @@ export async function processSos(
     locationIsStale,
     location?.captured_at,
   );
+  const locationAccuracy = location?.accuracy_meters == null
+    ? ""
+    : ` (accuracy ±${Math.round(Number(location.accuracy_meters))} m)`;
   const symptom = input.symptom ?? symptomReport?.symptom ?? "none reported";
 
   const { data: event, error: eventLookupError } = await db
@@ -344,6 +471,7 @@ export async function processSos(
   const templateValues: SosTemplateValues = {
     name: trekker.name,
     trekkerId: trekker.id,
+    deviceId: input.deviceId || "unavailable",
     severityLabel: severity.severityLabel,
     severityScore: severity.severityScore,
     route: trekker.route_name || "unavailable",
@@ -356,21 +484,18 @@ export async function processSos(
       " m",
     ),
     symptom,
-    locationStatus: eventLocationStatus,
+    sensorState: latestSensorState || "unavailable",
+    locationStatus: `${eventLocationStatus}${locationAccuracy}`,
     trackingId: atomic.eventId,
     mapUrl: mapUrl || "unavailable",
     rescueUrl: eventRescueUrl,
   };
   const message = buildSosMessage(templateValues);
 
-  const configuredRecipient = normalizeWhatsAppRecipient(
-    env.whatsappTestRecipient,
-  );
+  const configuredRecipient = configuredWhatsAppRecipient();
   const recipients = configuredRecipient ? [configuredRecipient] : [];
 
-  const { error: snapshotError } = await db
-    .from("sos_events")
-    .update({
+  const snapshot = {
       latitude: location?.latitude ?? null,
       longitude: location?.longitude ?? null,
       location_accuracy: location?.accuracy_meters ?? null,
@@ -392,44 +517,95 @@ export async function processSos(
       map_url: mapUrl,
       sms_message: message,
       sms_status: recipients.length ? "pending" : "not_configured",
-    })
-    .eq("id", atomic.eventId);
-  if (snapshotError) throw snapshotError;
+  };
+  await updateWithHardwareSchemaFallback({
+    enriched: () => db
+      .from("sos_events")
+      .update({
+        ...snapshot,
+        sensor_state: latestSensorState,
+        device_id: input.deviceId ?? null,
+        hardware_event_id:
+          input.source === "physical_button" ? requestId : null,
+        notification_started_at: recipients.length ? new Date().toISOString() : null,
+      })
+      .eq("id", atomic.eventId),
+    legacy: () => db
+      .from("sos_events")
+      .update(snapshot)
+      .eq("id", atomic.eventId),
+    context,
+    operation: "store SOS snapshot",
+    table: "sos_events",
+  });
 
-  const deliveries = await Promise.all(
-    recipients.map(async (phoneNumber) => ({
-      phoneNumber,
-      result: await sendWhatsAppSosAlert(phoneNumber, templateValues),
-    })),
+  // Persist the audit row before contacting Meta. This prevents a successful
+  // provider call from being invisible if the request is interrupted later.
+  // It also makes the initial idempotency key the database duplicate guard.
+  const preparedDeliveries = await Promise.all(
+    recipients.map(async (phoneNumber) => {
+      const attemptId = await createPendingNotificationAttempt(db, {
+        phoneNumber,
+        eventId: atomic.eventId,
+        message,
+        requestId,
+      });
+      logInfo(context, "sos.notification_attempt_created", {
+        sosEventId: atomic.eventId,
+        notificationAttemptId: attemptId,
+      });
+      return { phoneNumber, attemptId };
+    }),
   );
-  const notificationStatus = aggregateNotificationStatus(
+  const deliveries = await Promise.all(
+    preparedDeliveries.map(async ({ phoneNumber, attemptId }) => {
+      let result: NotificationResult;
+      try {
+        result = await sendWhatsAppSosAlert(phoneNumber, templateValues, context);
+      } catch {
+        // The sender normally converts transport exceptions to `failed`; this
+        // guard keeps the already-created audit row from remaining queued if a
+        // future sender implementation unexpectedly throws.
+        result = {
+          success: false,
+          status: "failed",
+          provider: "whatsapp",
+          error: "WhatsApp request failed.",
+        };
+      }
+      try {
+        await finalizeNotificationAttempt(db, attemptId, result, context);
+      } catch (error) {
+        logWarning(context, "sos.notification_attempt_finalize_failed", {
+          sosEventId: atomic.eventId,
+          notificationAttemptId: attemptId,
+          databaseCode:
+            error && typeof error === "object" && "code" in error
+              ? String(error.code)
+              : "unknown",
+        });
+        const failedResult: NotificationResult = {
+          success: false,
+          status: "failed",
+          provider: "whatsapp",
+          providerMessageId: result.providerMessageId,
+          providerSummary: result.providerMessageId
+            ? { metaAccepted: true, persistenceFailure: true }
+            : { persistenceFailure: true },
+          error: "The WhatsApp result could not be recorded safely.",
+        };
+        await finalizeNotificationAttempt(db, attemptId, failedResult, context);
+        result = failedResult;
+      }
+      return { phoneNumber, result };
+    }),
+  );
+  let notificationStatus = aggregateNotificationStatus(
     deliveries.map(({ result }) => result),
   );
 
-  let attemptsRecorded = true;
-  if (deliveries.length) {
-    const { error } = await db.from("sms_attempts").insert(
-      deliveries.map(({ phoneNumber, result }) =>
-        notificationAttempt(
-          phoneNumber,
-          result,
-          atomic.eventId,
-          message,
-          requestId,
-        ),
-      ),
-    );
-    if (error) {
-      attemptsRecorded = false;
-      logWarning(context, "sos.notification_audit_failed", {
-        sosEventId: atomic.eventId,
-        databaseCode: error.code,
-      });
-    }
-  }
-
   const firstAccepted = deliveries.find(({ result }) => result.success);
-  const { error: statusError } = await db
+  let { error: statusError } = await db
     .from("sos_events")
     .update({
       sms_status: notificationStatus,
@@ -445,11 +621,29 @@ export async function processSos(
     })
     .eq("id", atomic.eventId);
   if (statusError) {
-    logWarning(context, "sos.notification_status_audit_failed", {
+    logWarning(context, "sos.notification_status_update_failed", {
       sosEventId: atomic.eventId,
+      intendedStatus: notificationStatus,
       databaseCode: statusError.code,
     });
+    ({ error: statusError } = await db
+      .from("sos_events")
+      .update({
+        sms_status: "failed",
+        provider_reference: null,
+        provider_response: {
+          error: "The WhatsApp result could not be recorded safely.",
+        },
+      })
+      .eq("id", atomic.eventId));
+    if (statusError) throw statusError;
+    notificationStatus = "failed";
   }
+  logInfo(context, "sos.notification_status_updated", {
+    sosEventId: atomic.eventId,
+    notificationStatus,
+    databaseUpdateSucceeded: true,
+  });
 
   logInfo(context, "sos.processed", {
     sosEventId: atomic.eventId,
@@ -478,6 +672,6 @@ export async function processSos(
       provider: result.provider,
       status: result.status,
     })),
-    notificationAuditRecorded: attemptsRecorded,
+    notificationAuditRecorded: true,
   };
 }

@@ -1,5 +1,5 @@
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
-import { isAdminAuthorized, isTrekkerAuthorized } from "@/lib/api-auth";
+import { authorityOrTrekkerAccessError } from "@/lib/api-auth";
 import { SYMPTOM_DISCLAIMER } from "@/lib/disclaimer";
 import { idempotencyKey, isUniqueViolation } from "@/lib/idempotency";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -33,12 +33,11 @@ export const POST = withRequestContext(
     if (!input.success) {
       return validationFailure(zodMessage(input.error), zodDetails(input.error));
     }
-    if (
-      !isAdminAuthorized(request) &&
-      !isTrekkerAuthorized(request, input.data.trekkerId)
-    ) {
-      return failure("UNAUTHORIZED", "You may report symptoms only for your own profile.", 401);
-    }
+    const authError = authorityOrTrekkerAccessError(
+      request,
+      input.data.trekkerId,
+    );
+    if (authError) return authError;
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {

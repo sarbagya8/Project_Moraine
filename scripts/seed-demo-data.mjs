@@ -58,9 +58,14 @@ const db = createClient(supabaseUrl, serviceRoleKey, {
 async function assertSuccess(label, operation) {
   const { error } = await operation;
   if (!error) return;
-  if (error.code === "PGRST205" || error.code === "42P01") {
+  if (
+    error.code === "PGRST205" ||
+    error.code === "42P01" ||
+    error.code === "42703" ||
+    error.code === "PGRST204"
+  ) {
     throw new Error(
-      `${label}: ARGUS tables are missing. Apply supabase/migrations/001_initial_schema.sql through 008_optional_sensor_altitude.sql in order, then run this command again.`,
+      `${label}: the ARGUS schema is incomplete. Apply supabase/migrations/001_initial_schema.sql through 010_argus_hardware_integration.sql in order, then run this command again.`,
     );
   }
   throw new Error(`${label}: ${error.code || "database error"} ${error.message}`);

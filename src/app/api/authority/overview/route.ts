@@ -1,6 +1,7 @@
-import { isAdminAuthorized } from "@/lib/api-auth";
+import { authorityAccessError } from "@/lib/api-auth";
 import { databaseError } from "@/lib/api-route-support";
-import { failure, success } from "@/lib/api-response";
+import { success } from "@/lib/api-response";
+import { withHardwareSchemaFallback } from "@/lib/database-schema";
 import { env } from "@/lib/env";
 import { ageSeconds } from "@/lib/map-links";
 import { withRequestContext } from "@/lib/request-context";
@@ -11,12 +12,11 @@ export const dynamic = "force-dynamic";
 export const GET = withRequestContext(
   "GET /api/authority/overview",
   async (request, _routeContext, context) => {
-  if (!isAdminAuthorized(request)) {
-    return failure("UNAUTHORIZED_ADMIN", "Authority access is required.", 401);
-  }
+  const authError = authorityAccessError(request);
+  if (authError) return authError;
   try {
     const db = getSupabaseServer();
-    const [trekkers, devices, events, attempts, locations, readings, symptoms] =
+    const [trekkers, devicesResult, eventsResult, attempts, locations, readingsResult, symptoms] =
       await Promise.all([
         db
           .from("trekkers")
@@ -24,16 +24,43 @@ export const GET = withRequestContext(
             "id, name, mobile_number, emergency_contact, guide_mobile, route_name, blood_group, medical_notes, is_active, created_at, updated_at",
           )
           .order("name"),
-        db
-          .from("devices")
-          .select("id, trekker_id, is_active, last_seen_at, created_at, updated_at"),
-        db
-          .from("sos_events")
-          .select(
-            "id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
-          )
-          .order("created_at", { ascending: false })
-          .limit(100),
+        withHardwareSchemaFallback({
+          enriched: () => db
+            .from("devices")
+            .select("id, trekker_id, is_active, last_seen_at, firmware_version, created_at, updated_at"),
+          legacy: () => db
+            .from("devices")
+            .select("id, trekker_id, is_active, last_seen_at, created_at, updated_at"),
+          adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, firmware_version: null })),
+          context,
+          operation: "load authority devices",
+          table: "devices",
+        }),
+        withHardwareSchemaFallback({
+          enriched: () => db
+            .from("sos_events")
+            .select(
+              "id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, sensor_state, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
+            )
+            .order("created_at", { ascending: false })
+            .limit(100),
+          legacy: () => db
+            .from("sos_events")
+            .select(
+              "id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
+            )
+            .order("created_at", { ascending: false })
+            .limit(100),
+          adaptLegacy: (rows) => (rows || []).map((row) => ({
+            ...row,
+            device_id: null,
+            hardware_event_id: null,
+            sensor_state: null,
+          })),
+          context,
+          operation: "load authority emergencies",
+          table: "sos_events",
+        }),
         db
           .from("sms_attempts")
           .select(
@@ -46,13 +73,26 @@ export const GET = withRequestContext(
           .select("trekker_id, latitude, longitude, accuracy_meters, captured_at")
           .order("captured_at", { ascending: false })
           .limit(500),
-        db
-          .from("sensor_readings")
-          .select(
-            "trekker_id, device_id, heart_rate, spo2, altitude, temperature, captured_at",
-          )
-          .order("captured_at", { ascending: false })
-          .limit(500),
+        withHardwareSchemaFallback({
+          enriched: () => db
+            .from("sensor_readings")
+            .select(
+              "trekker_id, device_id, heart_rate, spo2, altitude, temperature, sensor_state, captured_at",
+            )
+            .order("captured_at", { ascending: false })
+            .limit(500),
+          legacy: () => db
+            .from("sensor_readings")
+            .select(
+              "trekker_id, device_id, heart_rate, spo2, altitude, temperature, captured_at",
+            )
+            .order("captured_at", { ascending: false })
+            .limit(500),
+          adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: "valid" })),
+          context,
+          operation: "load authority sensor readings",
+          table: "sensor_readings",
+        }),
         db
           .from("symptom_reports")
           .select("trekker_id, symptom, severity, notes, created_at")
@@ -61,13 +101,13 @@ export const GET = withRequestContext(
       ]);
     const error =
       trekkers.error ||
-      devices.error ||
-      events.error ||
       attempts.error ||
       locations.error ||
-      readings.error ||
       symptoms.error;
     if (error) throw error;
+    const devices = devicesResult.data || [];
+    const events = eventsResult.data || [];
+    const readings = readingsResult.data || [];
 
     const firstByTrekker = <T extends { trekker_id: string }>(rows: T[]) => {
       const map = new Map<string, T>();
@@ -77,11 +117,11 @@ export const GET = withRequestContext(
       return map;
     };
     const latestLocation = firstByTrekker(locations.data || []);
-    const latestReading = firstByTrekker(readings.data || []);
+    const latestReading = firstByTrekker(readings);
     const latestSymptom = firstByTrekker(symptoms.data || []);
-    const readingsByTrekker = new Map<string, typeof readings.data>();
+    const readingsByTrekker = new Map<string, typeof readings>();
     const symptomsByTrekker = new Map<string, typeof symptoms.data>();
-    for (const row of readings.data || []) {
+    for (const row of readings) {
       const history = readingsByTrekker.get(row.trekker_id) || [];
       history.push(row);
       readingsByTrekker.set(row.trekker_id, history);
@@ -93,13 +133,17 @@ export const GET = withRequestContext(
     }
     const trekkerById = new Map((trekkers.data || []).map((row) => [row.id, row]));
     const deviceByTrekker = new Map(
-      (devices.data || [])
+      devices
         .filter((row) => row.trekker_id)
         .map((row) => [row.trekker_id as string, row]),
     );
 
     return success({
       generatedAt: new Date().toISOString(),
+      hardwareSchemaReady:
+        devicesResult.hardwareSchemaReady &&
+        eventsResult.hardwareSchemaReady &&
+        readingsResult.hardwareSchemaReady,
       freshness: {
         locationSeconds: env.locationStaleSeconds,
         readingSeconds: env.readingStaleSeconds,
@@ -124,6 +168,7 @@ export const GET = withRequestContext(
                 id: device.id,
                 isActive: device.is_active,
                 lastSeenAt: device.last_seen_at,
+                firmwareVersion: device.firmware_version,
               }
             : null,
           latestLocation: location
@@ -141,8 +186,9 @@ export const GET = withRequestContext(
           latestReading: reading
             ? {
                 deviceId: reading.device_id,
-                heartRate: Number(reading.heart_rate),
-                spo2: Number(reading.spo2),
+                heartRate: reading.heart_rate == null ? null : Number(reading.heart_rate),
+                spo2: reading.spo2 == null ? null : Number(reading.spo2),
+                sensorState: reading.sensor_state,
                 altitude:
                   reading.altitude == null ? null : Number(reading.altitude),
                 temperature: reading.temperature == null ? null : Number(reading.temperature),
@@ -163,8 +209,9 @@ export const GET = withRequestContext(
             .reverse()
             .map((item) => ({
               deviceId: item.device_id,
-              heartRate: Number(item.heart_rate),
-              spo2: Number(item.spo2),
+              heartRate: item.heart_rate == null ? null : Number(item.heart_rate),
+              spo2: item.spo2 == null ? null : Number(item.spo2),
+              sensorState: item.sensor_state,
               altitude: item.altitude == null ? null : Number(item.altitude),
               temperature: item.temperature == null ? null : Number(item.temperature),
               capturedAt: item.captured_at,
@@ -180,7 +227,7 @@ export const GET = withRequestContext(
             })),
         };
       }),
-      devices: (devices.data || []).map((row) => ({
+      devices: devices.map((row) => ({
         id: row.id,
         trekkerId: row.trekker_id,
         trekkerName: row.trekker_id
@@ -188,10 +235,13 @@ export const GET = withRequestContext(
           : null,
         isActive: row.is_active,
         lastSeenAt: row.last_seen_at,
+        firmwareVersion: row.firmware_version,
         createdAt: row.created_at,
       })),
-      emergencies: (events.data || []).map((row) => ({
+      emergencies: events.map((row) => ({
         id: row.id,
+        deviceId: row.device_id,
+        hardwareEventId: row.hardware_event_id,
         trekkerId: row.trekker_id,
         trekkerName: trekkerById.get(row.trekker_id)?.name || "Unknown trekker",
         route: trekkerById.get(row.trekker_id)?.route_name || null,
@@ -213,6 +263,7 @@ export const GET = withRequestContext(
         temperature: row.temperature,
         readingCapturedAt: row.reading_captured_at,
         readingIsStale: row.reading_is_stale,
+        sensorState: row.sensor_state,
         symptom: row.symptom,
         symptomSeverity: row.symptom_severity,
         symptomNotes: row.symptom_notes,
@@ -232,7 +283,7 @@ export const GET = withRequestContext(
           id: row.id,
           sosEventId: row.sos_event_id,
           trekkerId:
-            (events.data || []).find((event) => event.id === row.sos_event_id)
+            events.find((event) => event.id === row.sos_event_id)
               ?.trekker_id || null,
           recipient: row.phone_number
             ? `${row.phone_number.slice(0, 5)}••••${row.phone_number.slice(-3)}`
@@ -246,7 +297,7 @@ export const GET = withRequestContext(
       }),
     });
   } catch (error) {
-    return databaseError(error, context);
+    return databaseError(error, context, { name: "load authority overview" });
   }
   },
 );

@@ -1,6 +1,8 @@
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
-import { isAdminAuthorized, isTrekkerAuthorized } from "@/lib/api-auth";
-import { env } from "@/lib/env";
+import {
+  authorityAccessError,
+  authorityOrTrekkerAccessError,
+} from "@/lib/api-auth";
 import { canonicalNepalMobile } from "@/lib/phone";
 import {
   databaseError,
@@ -28,9 +30,8 @@ export const GET = withRequestContext<RouteContext>(
         zodDetails(parsedId.error),
       );
     }
-    if (!isAdminAuthorized(request) && !isTrekkerAuthorized(request, parsedId.data)) {
-      return failure("UNAUTHORIZED", "Access to this trekker is not allowed.", 401);
-    }
+    const authError = authorityOrTrekkerAccessError(request, parsedId.data);
+    if (authError) return authError;
 
     try {
       const { data, error } = await getSupabaseServer()
@@ -59,20 +60,8 @@ export const GET = withRequestContext<RouteContext>(
 export const PATCH = withRequestContext<RouteContext>(
   "/api/trekkers/[id]",
   async (request, routeContext, context) => {
-    if (!env.administrativeAuthConfigured) {
-      return failure(
-        "ADMIN_AUTH_NOT_CONFIGURED",
-        "Administrative authentication is not configured.",
-        503,
-      );
-    }
-    if (!isAdminAuthorized(request)) {
-      return failure(
-        "UNAUTHORIZED_ADMIN",
-        "A valid administrative API key is required.",
-        401,
-      );
-    }
+    const authError = authorityAccessError(request);
+    if (authError) return authError;
 
     const { id } = await routeContext.params;
     const parsedId = trekkerId.safeParse(id);

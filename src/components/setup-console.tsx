@@ -193,7 +193,7 @@ export function SetupConsole() {
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           The server sends Meta&apos;s hello_world template only to the fixed
-          WHATSAPP_TEST_RECIPIENT. The browser cannot choose a recipient.
+          WHATSAPP_RECIPIENT_NUMBER. The browser cannot choose a recipient.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button

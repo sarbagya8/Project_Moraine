@@ -50,10 +50,58 @@ export type WhatsAppStatusEvent = {
 export type SosTemplatePayloadValues = {
   name: string;
   trekkerId: string;
+  deviceId: string;
+  severity: string;
+  route: string;
+  emergencyTime: string;
+  heartRate: string;
+  spo2: string;
+  temperature: string;
+  altitude: string;
+  symptom: string;
+  sensorState: string;
+  locationStatus: string;
+  trackingId: string;
   mapUrl: string;
   rescueUrl: string;
   dashboardButtonParameter?: string;
 };
+
+function buildTemplateBodyParameters(
+  values: SosTemplatePayloadValues,
+  templateName: string,
+) {
+  if (templateName === "argus_sos_alert") {
+    // The live approved argus_sos_alert template accepts exactly five body
+    // parameters and the Dashboard button is already fixed in the template.
+    return [
+      values.name,
+      values.trekkerId,
+      values.severity,
+      values.mapUrl,
+      values.rescueUrl,
+    ];
+  }
+
+  return [
+    values.name,
+    values.trekkerId,
+    values.deviceId,
+    values.severity,
+    values.route,
+    values.emergencyTime,
+    values.heartRate,
+    values.spo2,
+    values.temperature,
+    values.altitude,
+    values.symptom,
+    values.sensorState,
+    values.locationStatus,
+    values.trackingId,
+    values.mapUrl,
+    values.rescueUrl,
+  ];
+}
 
 export function buildSosTemplatePayload(
   recipient: string,
@@ -61,21 +109,16 @@ export function buildSosTemplatePayload(
   templateName = "argus_sos_alert",
   templateLanguage = "en_US",
 ) {
-  const orderedValues = [
-    values.name,
-    values.trekkerId,
-    "Critical SOS",
-    values.mapUrl,
-    values.rescueUrl,
-  ];
-
   const components: Array<Record<string, unknown>> = [
     {
       type: "body",
-      parameters: orderedValues.map((text) => ({ type: "text", text })),
+      parameters: buildTemplateBodyParameters(values, templateName).map(
+        (text) => ({ type: "text", text }),
+      ),
     },
   ];
-  if (values.dashboardButtonParameter) {
+
+  if (templateName !== "argus_sos_alert" && values.dashboardButtonParameter) {
     components.push({
       type: "button",
       sub_type: "url",
@@ -141,6 +184,7 @@ export function whatsappConfigurationReady(input: {
   phoneNumberId: string;
   businessAccountId: string;
   templateName: string;
+  recipientNumber: string;
 }) {
   return (
     input.demoMode ||
@@ -149,7 +193,8 @@ export function whatsappConfigurationReady(input: {
         input.accessToken &&
         input.phoneNumberId &&
         input.businessAccountId &&
-        input.templateName,
+        input.templateName &&
+        normalizeWhatsAppRecipient(input.recipientNumber),
     )
   );
 }

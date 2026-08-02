@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { locationSchema } from "./location-schema";
-import { readingSchema } from "./reading-schema";
+import { readingPayloadSchema } from "./reading-schema";
 import { trekkerId } from "./shared-schema";
 import { symptoms } from "./symptom-schema";
 
@@ -17,7 +17,7 @@ export const sosSchema = z
     deviceId: z.string().trim().min(1).max(100).optional(),
     source: z.enum(sosSources),
     symptom: z.enum(symptoms).optional(),
-    reading: readingSchema.omit({ trekkerId: true }).optional(),
+    reading: readingPayloadSchema.optional(),
     location: locationSchema
       .omit({ trekkerId: true, source: true })
       .optional(),

@@ -9,6 +9,7 @@ export class PortalApiError extends Error {
     message: string,
     readonly status: number,
     readonly code?: string,
+    readonly requestId?: string,
   ) {
     super(message);
   }
@@ -18,21 +19,36 @@ export async function portalRequest<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    cache: "no-store",
-    credentials: "include",
-    headers: {
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...init.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      cache: "no-store",
+      credentials: "include",
+      headers: {
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...init.headers,
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new PortalApiError("The request was cancelled.", 0, "REQUEST_ABORTED");
+    }
+    throw new PortalApiError(
+      "The ARGUS server could not be reached.",
+      0,
+      "NETWORK_ERROR",
+    );
+  }
+
   const json = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+  const requestId = response.headers.get("x-request-id") || undefined;
   if (!response.ok || !json?.success || json.data === undefined) {
     throw new PortalApiError(
-      json?.error?.message || "The request could not be completed.",
+      json?.error?.message || "The server returned an unexpected response.",
       response.status,
       json?.error?.code,
+      requestId,
     );
   }
   return json.data;
@@ -48,8 +64,9 @@ export type PortalLocation = {
 
 export type PortalReading = {
   deviceId?: string;
-  heartRate: number;
-  spo2: number;
+  heartRate: number | null;
+  spo2: number | null;
+  sensorState: string;
   altitude: number | null;
   temperature: number | null;
   capturedAt: string;
@@ -62,6 +79,7 @@ export type PortalDevice = {
   trekkerName?: string | null;
   isActive: boolean;
   lastSeenAt: string | null;
+  firmwareVersion?: string | null;
   createdAt?: string;
 };
 
@@ -99,6 +117,9 @@ export type PortalEmergency = {
   trekkerName: string;
   route: string | null;
   source: string;
+  deviceId: string | null;
+  hardwareEventId: string | null;
+  sensorState: string | null;
   status: "active" | "acknowledged" | "resolved";
   notificationStatus: string;
   severityScore: number | null;
@@ -124,6 +145,20 @@ export type PortalEmergency = {
   resolvedAt: string | null;
 };
 
+export type TrekkerEmergency = {
+  id: string;
+  trekkerId?: string;
+  status: "active" | "acknowledged" | "resolved";
+  notificationStatus: string;
+  severityScore: number | null;
+  severityLabel: string | null;
+  severityDataStatus: string | null;
+  locationIsStale: boolean;
+  readingIsStale: boolean;
+  rescueUrl: string | null;
+  createdAt: string;
+};
+
 export type NotificationAttempt = {
   id: string;
   sosEventId: string;
@@ -138,6 +173,7 @@ export type NotificationAttempt = {
 
 export type AuthorityOverview = {
   generatedAt: string;
+  hardwareSchemaReady: boolean;
   freshness: { locationSeconds: number; readingSeconds: number };
   trekkers: PortalTrekker[];
   devices: PortalDevice[];
@@ -147,6 +183,7 @@ export type AuthorityOverview = {
 
 export type TrekkerOverview = {
   generatedAt: string;
+  hardwareSchemaReady: boolean;
   freshness: { locationSeconds: number; readingSeconds: number };
   trekker: { id: string; name: string; route: string | null };
   device: PortalDevice | null;
@@ -166,17 +203,7 @@ export type TrekkerOverview = {
     notes: string | null;
     createdAt: string;
   }>;
-  emergencies: Array<{
-    id: string;
-    status: string;
-    notificationStatus: string;
-    severityScore: number | null;
-    severityLabel: string | null;
-    locationIsStale: boolean;
-    readingIsStale: boolean;
-    rescueUrl: string | null;
-    createdAt: string;
-  }>;
+  emergencies: TrekkerEmergency[];
 };
 
 export function idempotencyHeaders(key = crypto.randomUUID()) {

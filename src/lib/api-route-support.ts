@@ -1,6 +1,7 @@
 import "server-only";
 import type { ZodError } from "zod";
 import { failure } from "./api-response";
+import { databaseErrorFields, isHardwareMigrationError } from "./database-error";
 import type { RequestContext } from "./request-context";
 import { logError } from "./request-context";
 import { getSupabaseServer } from "./supabase/server";
@@ -17,18 +18,17 @@ export type TrekkerRow = {
   is_active: boolean;
 };
 
-type DatabaseLikeError = {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
-};
-
-export function databaseError(error: unknown, context?: RequestContext) {
-  const databaseError = error as DatabaseLikeError;
+export function databaseError(
+  error: unknown,
+  context?: RequestContext,
+  operation?: { name: string; table?: string },
+) {
+  const databaseError = error as { code?: string };
   if (context) {
     logError(context, "database.operation_failed", {
-      databaseCode: databaseError?.code || "unknown",
+      operation: operation?.name || "unspecified",
+      table: operation?.table || "unspecified",
+      ...databaseErrorFields(error),
     });
   }
 
@@ -62,7 +62,8 @@ export function databaseError(error: unknown, context?: RequestContext) {
 
   if (
     databaseError?.code === "PGRST205" ||
-    databaseError?.code === "42P01"
+    databaseError?.code === "42P01" ||
+    isHardwareMigrationError(error)
   ) {
     return failure(
       "DATABASE_MIGRATIONS_REQUIRED",

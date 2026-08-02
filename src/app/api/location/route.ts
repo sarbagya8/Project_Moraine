@@ -1,10 +1,8 @@
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
-import { isDeviceAuthorized, isTrekkerAuthorized } from "@/lib/api-auth";
-import { env } from "@/lib/env";
+import { trekkerAccessError } from "@/lib/api-auth";
 import {
   idempotencyKey,
   isUniqueViolation,
-  suppliedIdempotencyKey,
 } from "@/lib/idempotency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -39,36 +37,14 @@ export const POST = withRequestContext(
     }
 
     if (input.data.source === "device") {
-      if (!env.deviceApiKeyConfigured) {
-        return failure(
-          "DEVICE_AUTH_NOT_CONFIGURED",
-          "Device authentication is not configured.",
-          503,
-        );
-      }
-      if (!isDeviceAuthorized(request)) {
-        return failure(
-          "UNAUTHORIZED_DEVICE",
-          "A valid device API key is required for device locations.",
-          401,
-        );
-      }
-      if (!suppliedIdempotencyKey(request)) {
-        return failure(
-          "IDEMPOTENCY_KEY_REQUIRED",
-          "A valid x-idempotency-key header is required for device locations.",
-          400,
-        );
-      }
-    } else if (
-      input.data.source === "browser" &&
-      !isTrekkerAuthorized(request, input.data.trekkerId)
-    ) {
       return failure(
-        "UNAUTHORIZED_TREKKER",
-        "You may share location only for your own profile.",
-        401,
+        "USE_TREKKER_DEVICE_BRIDGE",
+        "ARGUS locations come from authenticated browser geolocation, not the ESP32.",
+        410,
       );
+    } else if (input.data.source === "browser") {
+      const authError = trekkerAccessError(request, input.data.trekkerId);
+      if (authError) return authError;
     }
 
     try {

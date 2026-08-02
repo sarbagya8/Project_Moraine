@@ -117,14 +117,24 @@ export const POST = withRequestContext(
               : event.status === "read"
                 ? { read_at: event.occurredAt }
                 : { failed_at: event.occurredAt };
-        const { error: attemptError } = await db
+        const updatePayload = {
+          status: event.status,
+          ...timestamps,
+          ...(event.error ? { error_message: event.error } : {}),
+        };
+        let { error: attemptError } = await db
           .from("sms_attempts")
-          .update({
-            status: event.status,
-            ...timestamps,
-            ...(event.error ? { error_message: event.error } : {}),
-          })
+          .update(updatePayload)
           .eq("id", attempt.id);
+        if (attemptError?.code === "42703") {
+          ({ error: attemptError } = await db
+            .from("sms_attempts")
+            .update({
+              status: event.status,
+              ...(event.error ? { error_message: event.error } : {}),
+            })
+            .eq("id", attempt.id));
+        }
         if (attemptError) throw attemptError;
 
         const { data: attempts, error: aggregateError } = await db

@@ -131,8 +131,8 @@ export const env = {
   get whatsappApiVersion() {
     return value("WHATSAPP_API_VERSION") || "v23.0";
   },
-  get whatsappTestRecipient() {
-    return value("WHATSAPP_TEST_RECIPIENT");
+  get whatsappRecipientNumber() {
+    return value("WHATSAPP_RECIPIENT_NUMBER");
   },
   get whatsappTemplateName() {
     return value("WHATSAPP_TEMPLATE_NAME");
@@ -154,6 +154,7 @@ export const env = {
       phoneNumberId: this.whatsappPhoneNumberId,
       businessAccountId: this.whatsappBusinessAccountId,
       templateName: this.whatsappTemplateName,
+      recipientNumber: this.whatsappRecipientNumber,
     });
   },
   get whatsappSmokeTestConfigured() {
@@ -162,7 +163,8 @@ export const env = {
       this.whatsappNotificationsEnabled &&
         this.whatsappAccessToken &&
         this.whatsappPhoneNumberId &&
-        this.whatsappBusinessAccountId,
+        this.whatsappBusinessAccountId &&
+        this.whatsappRecipientNumber,
     );
   },
   get whatsappWebhookConfigured() {

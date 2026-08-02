@@ -1,6 +1,5 @@
-import { failure, readJson, success, validationFailure } from "@/lib/api-response";
-import { isAdminAuthorized } from "@/lib/api-auth";
-import { env } from "@/lib/env";
+import { readJson, success, validationFailure } from "@/lib/api-response";
+import { authorityAccessError } from "@/lib/api-auth";
 import { canonicalNepalMobile } from "@/lib/phone";
 import {
   databaseError,
@@ -14,28 +13,10 @@ import { createTrekkerSchema } from "@/lib/validation/trekker-schema";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function requireAdmin(request: Request) {
-  if (!env.administrativeAuthConfigured) {
-    return failure(
-      "ADMIN_AUTH_NOT_CONFIGURED",
-      "Administrative authentication is not configured.",
-      503,
-    );
-  }
-  if (!isAdminAuthorized(request)) {
-    return failure(
-      "UNAUTHORIZED_ADMIN",
-      "A valid administrative API key is required.",
-      401,
-    );
-  }
-  return null;
-}
-
 export const GET = withRequestContext(
   "/api/trekkers",
   async (request, _routeContext, context) => {
-    const authError = requireAdmin(request);
+    const authError = authorityAccessError(request);
     if (authError) return authError;
 
     try {
@@ -56,7 +37,7 @@ export const GET = withRequestContext(
 export const POST = withRequestContext(
   "/api/trekkers",
   async (request, _routeContext, context) => {
-    const authError = requireAdmin(request);
+    const authError = authorityAccessError(request);
     if (authError) return authError;
 
     const parsed = await readJson(request);

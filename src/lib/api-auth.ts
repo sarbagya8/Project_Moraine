@@ -1,5 +1,7 @@
 import "server-only";
 import { timingSafeEqual } from "node:crypto";
+import { failure } from "./api-response";
+import { env } from "./env";
 import { requestSession } from "./portal-auth";
 
 export function isSecretEqual(
@@ -20,18 +22,51 @@ export function isDeviceAuthorized(request: Request) {
   );
 }
 
-export function isAdminAuthorized(request: Request) {
-  const session = requestSession(request);
-  return (
-    session?.role === "authority" ||
-    isSecretEqual(
-      request.headers.get("x-admin-api-key")?.trim() || null,
-      process.env.ADMIN_API_KEY?.trim(),
-    )
+function hasAdminApiKey(request: Request) {
+  return isSecretEqual(
+    request.headers.get("x-admin-api-key")?.trim() || null,
+    process.env.ADMIN_API_KEY?.trim(),
   );
 }
 
-export function isTrekkerAuthorized(request: Request, trekkerId: string) {
+export function authorityAccessError(request: Request) {
+  if (!env.administrativeAuthConfigured) {
+    return failure(
+      "ADMIN_AUTH_NOT_CONFIGURED",
+      "Administrative authentication is not configured.",
+      503,
+    );
+  }
   const session = requestSession(request);
-  return session?.role === "trekker" && session.subject === trekkerId;
+  if (session?.role === "authority" || hasAdminApiKey(request)) return null;
+  if (!session) return failure("UNAUTHENTICATED", "Sign in is required.", 401);
+  return failure("FORBIDDEN", "Authority access is required.", 403);
+}
+
+export function trekkerAccessError(request: Request, trekkerId?: string) {
+  const session = requestSession(request);
+  if (!session) return failure("UNAUTHENTICATED", "Sign in is required.", 401);
+  if (
+    session.role !== "trekker" ||
+    (trekkerId !== undefined && session.subject !== trekkerId)
+  ) {
+    return failure("FORBIDDEN", "Trekker access is limited to your own profile.", 403);
+  }
+  return null;
+}
+
+export function authorityOrTrekkerAccessError(
+  request: Request,
+  trekkerId: string,
+) {
+  const session = requestSession(request);
+  if (
+    hasAdminApiKey(request) ||
+    session?.role === "authority" ||
+    (session?.role === "trekker" && session.subject === trekkerId)
+  ) {
+    return null;
+  }
+  if (!session) return failure("UNAUTHENTICATED", "Sign in is required.", 401);
+  return failure("FORBIDDEN", "Access to this Trekker is not allowed.", 403);
 }

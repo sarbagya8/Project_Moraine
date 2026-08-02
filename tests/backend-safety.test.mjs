@@ -65,6 +65,8 @@ test("sensor validation accepts valid values and rejects impossible values", () 
     spo2: 96,
     altitude: 2400,
     temperature: 18.5,
+    temperatureType: "ambient",
+    sensorState: "valid",
     capturedAt: timestamp,
   };
   assert.equal(readingSchema.safeParse(valid).success, true);
@@ -136,7 +138,7 @@ test("severity score is deterministic, bounded, and reports insufficient data", 
     temperature: 40,
   });
   assert.deepEqual(result, {
-    severityScore: 100,
+    severityScore: 95,
     severityLabel: "critical",
     dataStatus: "insufficient_data",
   });
@@ -179,23 +181,23 @@ test("SOS message contains the documented ARGUS fields and disclaimer", () => {
   assert.match(message, /not a medical diagnosis/);
 });
 
-test("notification aggregation treats Meta acceptance as accepted, not delivered", () => {
+test("notification aggregation records an accepted Meta request as sent, not delivered", () => {
   assert.equal(
     aggregateNotificationStatus([
       { success: false, status: "failed", provider: "whatsapp" },
-      { success: true, status: "accepted", provider: "whatsapp" },
+      { success: true, status: "sent", provider: "whatsapp" },
     ]),
-    "accepted",
+    "sent",
   );
   assert.equal(aggregateNotificationStatus([]), "not_configured");
 });
 
-test("SOS WhatsApp payload uses the approved template and five ordered parameters", () => {
+test("SOS WhatsApp payload uses the approved argus_sos_alert template parameters", () => {
   const payload = buildSosTemplatePayload("9779860582174", {
     name: "Demo Trekker",
     trekkerId: "TRK-DEMO-001",
-    severityLabel: "critical",
-    severityScore: 92,
+    deviceId: "ARGUS-ESP32-DEMO-01",
+    severity: "critical (92/100)",
     route: "Mardi Himal",
     emergencyTime: timestamp,
     heartRate: "88 bpm",
@@ -203,6 +205,7 @@ test("SOS WhatsApp payload uses the approved template and five ordered parameter
     temperature: "36.7 C",
     altitude: "2950 m",
     symptom: "headache",
+    sensorState: "valid",
     locationStatus: "fresh",
     trackingId: "event-123",
     mapUrl: "https://maps.google.com/?q=28.4572,83.9546",
@@ -215,7 +218,7 @@ test("SOS WhatsApp payload uses the approved template and five ordered parameter
     [
       "Demo Trekker",
       "TRK-DEMO-001",
-      "Critical SOS",
+      "critical (92/100)",
       "https://maps.google.com/?q=28.4572,83.9546",
       "https://argus.test/rescue/event-123",
     ],
@@ -223,14 +226,30 @@ test("SOS WhatsApp payload uses the approved template and five ordered parameter
   assert.equal(payload.template.components.length, 1);
 });
 
-test("SOS WhatsApp payload adds a dynamic dashboard URL button only when configured", () => {
-  const payload = buildSosTemplatePayload("9779860582174", {
-    name: "Demo Trekker",
-    trekkerId: "TRK-DEMO-001",
-    mapUrl: "https://maps.google.com/?q=28.4572,83.9546",
-    rescueUrl: "https://argus.test/rescue/event-123",
-    dashboardButtonParameter: "event-123",
-  });
+test("SOS WhatsApp payload adds a dynamic dashboard URL button only for non-argus_sos_alert templates", () => {
+  const payload = buildSosTemplatePayload(
+    "9779860582174",
+    {
+      name: "Demo Trekker",
+      trekkerId: "TRK-DEMO-001",
+      deviceId: "ARGUS-ESP32-DEMO-01",
+      severity: "critical (92/100)",
+      route: "Mardi Himal",
+      emergencyTime: timestamp,
+      heartRate: "88 bpm",
+      spo2: "97%",
+      temperature: "36.7 C",
+      altitude: "2950 m",
+      symptom: "headache",
+      sensorState: "valid",
+      locationStatus: "fresh",
+      trackingId: "event-123",
+      mapUrl: "https://maps.google.com/?q=28.4572,83.9546",
+      rescueUrl: "https://argus.test/rescue/event-123",
+      dashboardButtonParameter: "event-123",
+    },
+    "argus_sos_hackathon",
+  );
 
   assert.deepEqual(payload.template.components[1], {
     type: "button",
@@ -252,6 +271,17 @@ test("notification retry cooldown blocks rapid retries and then expires", () => 
   );
 });
 
+test("notification retry uses only the fixed configured prototype recipient", () => {
+  const route = readFileSync(
+    new URL("../src/app/api/rescue/[id]/retry-notification/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(route, /NOTIFICATION_RETRY_NOT_AVAILABLE/);
+  assert.match(route, /\["failed", "not_configured"\]\.includes/);
+  assert.match(route, /configuredWhatsAppRecipient\(\)/);
+  assert.doesNotMatch(route, /emergency_contact|guide_mobile|whatsappTestRecipient/);
+});
+
 test("SOS migration preserves atomic request-id and cooldown duplicate handling", () => {
   const migration = readFileSync(
     new URL("../supabase/migrations/003_idempotency_and_integrity.sql", import.meta.url),
@@ -262,6 +292,18 @@ test("SOS migration preserves atomic request-id and cooldown duplicate handling"
   assert.match(migration, /make_interval\(secs => p_cooldown_seconds\)/);
 });
 
+test("latest SOS migration reuses every unresolved SOS and permits in-flight attempts", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/012_single_active_sos_and_pending_attempts.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /where request_id = p_request_id/);
+  assert.match(migration, /status in \('active', 'acknowledged'\)/);
+  assert.doesNotMatch(migration, /created_at >=/);
+  assert.match(migration, /'pending'/);
+});
+
 test("WhatsApp configuration requires all live provider fields", () => {
   const base = {
     demoMode: false,
@@ -270,10 +312,15 @@ test("WhatsApp configuration requires all live provider fields", () => {
     phoneNumberId: "123",
     businessAccountId: "456",
     templateName: "argus_sos_alert",
+    recipientNumber: "9779860582174",
   };
   assert.equal(whatsappConfigurationReady(base), true);
   assert.equal(
     whatsappConfigurationReady({ ...base, accessToken: "" }),
+    false,
+  );
+  assert.equal(
+    whatsappConfigurationReady({ ...base, recipientNumber: "" }),
     false,
   );
   assert.equal(
@@ -346,5 +393,5 @@ test("demo SOS requests require authority access", () => {
     "utf8",
   );
   assert.match(route, /source === "demo"/);
-  assert.match(route, /isAdminAuthorized\(request\)/);
+  assert.match(route, /authorityAccessError\(request\)/);
 });

@@ -3,7 +3,7 @@
 ## Code and database
 
 - [ ] Back up the Supabase project.
-- [ ] Apply missing migrations `001` through `008` in order.
+- [ ] Apply missing migrations `001` through `013` in order.
 - [ ] Use `npm run seed:demo` only in a local or non-production hackathon environment.
 - [ ] Confirm RLS is enabled and direct `anon`/`authenticated` access is revoked.
 - [ ] Run `npm run verify`.
@@ -38,11 +38,12 @@
 
 ## BLE wristband checks
 
-- [ ] install the ESP32 BLE, ArduinoJson, BMP280, and sensor libraries
-- [ ] set the non-secret firmware device and trekker IDs to the assigned records
-- [ ] replace simulated MAX30102 values with physically tested integration
+- [ ] install the Espressif ESP32 core, SparkFun MAX3010x, Adafruit BMP280,
+      Adafruit MPU6050, Adafruit SSD1306, and Adafruit GFX libraries
+- [ ] upload the production sketch and register its printed eFuse-derived device ID
+- [ ] confirm real MAX30102 values and null unavailable states on the physical sensor
 - [ ] use a supported Chromium browser over HTTPS or localhost
-- [ ] verify BLE identity, phone GPS permission, readings, and a two-second physical SOS
+- [ ] verify BLE identity, phone GPS permission, readings, and an 800 ms physical SOS hold
 - [ ] test BLE disconnect, denied GPS, internet loss, SOS queue retry, and phone battery use
 - [ ] keep a manual emergency method
 

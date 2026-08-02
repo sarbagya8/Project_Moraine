@@ -6,10 +6,11 @@ export type RoutePoint = {
 };
 
 export type SensorReading = {
-  heartRate: number;
-  spo2: number;
-  altitude: number;
+  heartRate: number | null;
+  spo2: number | null;
+  altitude: number | null;
   temperature: number | null;
+  sensorState?: string;
   capturedAt: string;
 };
 
@@ -24,6 +25,8 @@ export type RescueRecord = {
     activatedAt: string;
     resolvedAt?: string | null;
     source: string;
+    deviceId?: string | null;
+    hardwareEventId?: string | null;
     status: string;
     notificationStatus: string;
     severityScore?: number | null;

@@ -1,6 +1,7 @@
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
 import { isDeviceAuthorized } from "@/lib/api-auth";
 import { SENSOR_DISCLAIMER } from "@/lib/disclaimer";
+import { insertSensorReadingCompatible } from "@/lib/database-schema";
 import { env } from "@/lib/env";
 import {
   idempotencyKey,
@@ -66,22 +67,41 @@ export const POST = withRequestContext(
         return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
       }
 
-      const { data, error } = await getSupabaseServer()
-        .from("sensor_readings")
-        .insert({
+      const { data: assignedDevice, error: deviceError } = await getSupabaseServer()
+        .from("devices")
+        .select("id")
+        .eq("id", input.data.deviceId)
+        .eq("trekker_id", input.data.trekkerId)
+        .eq("is_active", true)
+        .maybeSingle<{ id: string }>();
+      if (deviceError) throw deviceError;
+      if (!assignedDevice) {
+        return failure(
+          "UNAUTHORIZED_DEVICE",
+          "This device is not assigned to the supplied trekker.",
+          403,
+        );
+      }
+
+      const { data, error, hardwareSchemaReady } = await insertSensorReadingCompatible(
+        getSupabaseServer(),
+        {
           trekker_id: input.data.trekkerId,
           device_id: input.data.deviceId,
           heart_rate: input.data.heartRate,
           spo2: input.data.spo2,
           altitude: input.data.altitude,
           temperature: input.data.temperature,
+          temperature_kind: input.data.temperatureType ?? null,
+          sensor_state: input.data.sensorState,
+          device_uptime_ms: input.data.deviceCapturedAtMs ?? null,
           captured_at: input.data.capturedAt,
           request_id: idempotencyKey(request, context.requestId),
-        })
-        .select("id")
-        .single<{ id: string }>();
+        },
+      );
 
       if (error) throw error;
+      if (!data) throw new Error("READING_INSERT_INVALID_RESPONSE");
       await getSupabaseServer()
         .from("devices")
         .update({ last_seen_at: input.data.capturedAt })
@@ -91,6 +111,7 @@ export const POST = withRequestContext(
         {
           id: data.id,
           capturedAt: input.data.capturedAt,
+          hardwareSchemaReady,
           disclaimer: SENSOR_DISCLAIMER,
         },
         201,

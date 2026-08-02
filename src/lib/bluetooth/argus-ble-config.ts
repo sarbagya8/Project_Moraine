@@ -1,18 +1,21 @@
+export const ARGUS_SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+export const ARGUS_CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
 export const ARGUS_BLE = Object.freeze({
-  service: "7c9e0001-9b6a-4b4f-9e8a-45d2c480a001",
-  deviceInfo: "7c9e0002-9b6a-4b4f-9e8a-45d2c480a001",
-  liveSensor: "7c9e0003-9b6a-4b4f-9e8a-45d2c480a001",
-  sosEvent: "7c9e0004-9b6a-4b4f-9e8a-45d2c480a001",
+  service: ARGUS_SERVICE_UUID,
+  characteristic: ARGUS_CHARACTERISTIC_UUID,
 });
 
 export const ARGUS_SENSOR_STATES = [
-  "initializing",
   "valid",
   "no_finger",
   "weak_signal",
-  "invalid_reading",
-  "sensor_not_found",
+  "invalid",
+  "sensor_unavailable",
   "sensor_error",
 ] as const;
 
 export type ArgusSensorState = (typeof ARGUS_SENSOR_STATES)[number];
+
+export const ARGUS_READING_PERSIST_INTERVAL_MS = 15_000;
+export const ARGUS_SENSOR_STALE_MS = 15_000;

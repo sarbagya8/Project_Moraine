@@ -1,20 +1,15 @@
-import { isAdminAuthorized } from "@/lib/api-auth";
+import { authorityAccessError } from "@/lib/api-auth";
 import { failure, readJson, success } from "@/lib/api-response";
 import { createPairingCode, hashPairingCode } from "@/lib/portal-auth";
+import { databaseError } from "@/lib/api-route-support";
 import { withRequestContext } from "@/lib/request-context";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function unauthorized(request: Request) {
-  return isAdminAuthorized(request)
-    ? null
-    : failure("UNAUTHORIZED_ADMIN", "Authority access is required.", 401);
-}
-
-export const GET = withRequestContext("/api/devices", async (request) => {
-  const denied = unauthorized(request);
+export const GET = withRequestContext("/api/devices", async (request, _route, context) => {
+  const denied = authorityAccessError(request);
   if (denied) return denied;
   try {
     const { data, error } = await getSupabaseServer()
@@ -36,13 +31,13 @@ export const GET = withRequestContext("/api/devices", async (request) => {
         updatedAt: device.updated_at,
       })),
     });
-  } catch {
-    return failure("DATABASE_ERROR", "Devices could not be loaded.", 503);
+  } catch (error) {
+    return databaseError(error, context, { name: "load devices", table: "devices" });
   }
 });
 
-export const POST = withRequestContext("/api/devices", async (request) => {
-  const denied = unauthorized(request);
+export const POST = withRequestContext("/api/devices", async (request, _route, context) => {
+  const denied = authorityAccessError(request);
   if (denied) return denied;
   const parsed = await readJson(request);
   if (parsed.error) return parsed.error;
@@ -84,11 +79,7 @@ export const POST = withRequestContext("/api/devices", async (request) => {
       },
       201,
     );
-  } catch {
-    return failure(
-      "DATABASE_ERROR",
-      "The device could not be created. Check that its ID and trekker assignment are unique.",
-      409,
-    );
+  } catch (error) {
+    return databaseError(error, context, { name: "create device", table: "devices" });
   }
 });

@@ -1,5 +1,5 @@
 import { failure, success, validationFailure } from "@/lib/api-response";
-import { isAdminAuthorized, isTrekkerAuthorized } from "@/lib/api-auth";
+import { authorityOrTrekkerAccessError } from "@/lib/api-auth";
 import { env } from "@/lib/env";
 import { ageSeconds } from "@/lib/map-links";
 import {
@@ -24,12 +24,11 @@ export const GET = withRequestContext(
     if (!input.success) {
       return validationFailure(zodMessage(input.error), zodDetails(input.error));
     }
-    if (
-      !isAdminAuthorized(request) &&
-      !isTrekkerAuthorized(request, input.data.trekkerId)
-    ) {
-      return failure("UNAUTHORIZED", "Access to this location is not allowed.", 401);
-    }
+    const authError = authorityOrTrekkerAccessError(
+      request,
+      input.data.trekkerId,
+    );
+    if (authError) return authError;
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {
