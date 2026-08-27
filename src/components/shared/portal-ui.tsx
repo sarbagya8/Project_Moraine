@@ -135,6 +135,6 @@ export function displayUserId(value: string) {
 
 export function displayDeviceId(value?: string | null) {
   if (!value) return "Unassigned";
-  if (value === "ARGUS-ESP32-DEMO-01") return "ARGUS Safety Device 01";
-  return value.startsWith("ARGUS-") ? "ARGUS Safety Device" : value;
+  if (value === "ARGUS-ESP32-DEMO-01") return "MORAINE Safety Device 01";
+  return value.startsWith("ARGUS-") ? "MORAINE Safety Device" : value;
 }

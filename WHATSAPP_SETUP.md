@@ -1,6 +1,6 @@
-# ARGUS WhatsApp Cloud API setup
+# MORAINE WhatsApp Cloud API setup
 
-ARGUS uses Meta's official WhatsApp Cloud API through server-side `fetch`. It does not use WhatsApp Web automation, QR sessions, browser drivers, or unofficial WhatsApp libraries.
+MORAINE uses Meta's official WhatsApp Cloud API through server-side `fetch`. It does not use WhatsApp Web automation, QR sessions, browser drivers, or unofficial WhatsApp libraries.
 
 ## Meta setup
 
@@ -54,7 +54,7 @@ Create and approve the template named by `WHATSAPP_TEMPLATE_NAME`. The live appr
 4. map URL
 5. Rescue Passport URL
 
-The fixed template text should start with `ARGUS SOS ALERT` and end with: `This information supports rescue coordination and is not a medical diagnosis.`
+The fixed template text should start with `MORAINE SOS ALERT` and end with: `This information supports rescue coordination and is not a medical diagnosis.` Update the approved Meta template separately if its header still uses the former product name; the template identifier remains unchanged for compatibility.
 
 ## Webhook
 
@@ -64,7 +64,7 @@ Deploy to public HTTPS, then configure:
 https://YOUR_DOMAIN/api/webhooks/whatsapp
 ```
 
-Use `WHATSAPP_WEBHOOK_VERIFY_TOKEN` during subscription and subscribe to the `messages` field. POST requests must include Meta's valid `X-Hub-Signature-256`; ARGUS verifies it with HMAC SHA-256 and `META_APP_SECRET`.
+Use `WHATSAPP_WEBHOOK_VERIFY_TOKEN` during subscription and subscribe to the `messages` field. POST requests must include Meta's valid `X-Hub-Signature-256`; MORAINE verifies it with HMAC SHA-256 and `META_APP_SECRET`.
 
 Verified status events update the audit row matched by Meta message ID. Duplicate events are safe, and delivered/read states are not downgraded.
 

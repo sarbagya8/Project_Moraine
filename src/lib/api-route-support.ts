@@ -67,7 +67,7 @@ export function databaseError(
   ) {
     return failure(
       "DATABASE_MIGRATIONS_REQUIRED",
-      "The ARGUS database migrations have not been applied.",
+      "The MORAINE database migrations have not been applied.",
       503,
     );
   }

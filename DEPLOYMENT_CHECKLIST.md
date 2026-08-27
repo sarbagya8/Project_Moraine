@@ -1,4 +1,4 @@
-# ARGUS deployment checklist
+# MORAINE deployment checklist
 
 ## Code and database
 

@@ -3,6 +3,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 export default function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
@@ -51,5 +52,31 @@ export default function ResetPasswordPage() {
     setPending(false);
   }
 
-  return <main className="login-page"><section className="login-card"><Link href="/" className="brand">ARGUS</Link><p className="eyebrow">Trekker portal</p><h1>Choose a new password</h1>{error ? <p className="form-error" role="alert">{error}</p> : null}{message ? <p className="form-message">{message}</p> : null}{ready ? <form action={(form) => void updatePassword(form)}><label htmlFor="password">New password</label><input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required /><label htmlFor="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required /><button className="primary-button" disabled={pending}>{pending ? "Updating…" : "Update password"}</button></form> : null}<Link className="text-link" href="/user/login">Back to Trekker Login</Link></section></main>;
+  return (
+    <main className="login-page">
+      <section className="login-card">
+        <div className="mb-4">
+          <BrandLogo subtitle="Trekker" size="md" />
+        </div>
+        <p className="eyebrow">Trekker portal</p>
+        <h1>Choose a new password</h1>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
+        {message ? <p className="form-message">{message}</p> : null}
+        {ready ? (
+          <form action={(form) => void updatePassword(form)}>
+            <label htmlFor="password">New password</label>
+            <input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+            <label htmlFor="confirmPassword">Confirm password</label>
+            <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required />
+            <button className="primary-button" disabled={pending}>
+              {pending ? "Updating…" : "Update password"}
+            </button>
+          </form>
+        ) : null}
+        <Link className="text-link" href="/user/login">
+          Back to Trekker Login
+        </Link>
+      </section>
+    </main>
+  );
 }

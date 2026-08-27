@@ -84,7 +84,7 @@ export default function SafetyMap({
     return (
       <div className="map-unavailable" style={{ minHeight: height }}>
         <strong>No location shared yet</strong>
-        <p>The map will appear after ARGUS receives a valid GPS location.</p>
+        <p>The map will appear after MORAINE receives a valid GPS location.</p>
       </div>
     );
   }

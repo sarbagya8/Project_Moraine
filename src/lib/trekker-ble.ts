@@ -225,17 +225,17 @@ function connectionActionMessage(operation: string, error: unknown) {
     case "gatt_connect":
       return "GATT connection failed. Disconnect the wristband from mobile BLE apps or other phones, keep it nearby, and retry.";
     case "argus_service_discovery":
-      return `The selected device does not expose ARGUS service ${ARGUS_BLE.service}.`;
+      return `The selected device does not expose MORAINE service ${ARGUS_BLE.service}.`;
     case "required_characteristic_discovery":
-      return `The selected device does not expose ARGUS characteristic ${ARGUS_BLE.characteristic}.`;
+      return `The selected device does not expose MORAINE characteristic ${ARGUS_BLE.characteristic}.`;
     case "backend_device_verification":
       return "Device verification failed for this signed-in user.";
     case "notification_subscription":
       return error instanceof Error
         ? error.message
-        : "The confirmed ARGUS characteristic could not start notifications.";
+        : "The confirmed MORAINE characteristic could not start notifications.";
     case "initial_characteristic_read":
-      return "ARGUS connected, but its current BLE packet could not be processed.";
+      return "MORAINE connected, but its current BLE packet could not be processed.";
     default:
       return error instanceof Error ? error.message : "BLE connection failed.";
   }
@@ -951,7 +951,7 @@ export class TrekkerBleBridge {
       this.handlers.onMessage(
         environment === "insecure_context"
           ? "Web Bluetooth requires localhost or HTTPS."
-          : "Use Chrome or Edge on localhost or HTTPS, enable Bluetooth, and keep the ARGUS wristband nearby.",
+          : "Use Chrome or Edge on localhost or HTTPS, enable Bluetooth, and keep the MORAINE wristband nearby.",
       );
       return;
     }
@@ -1126,7 +1126,7 @@ export class TrekkerBleBridge {
       this.handlers.onConnection("device_mismatch");
       server.disconnect();
       throw new Error(
-        "The selected ARGUS wristband is not the device assigned to this user.",
+        "The selected MORAINE wristband is not the device assigned to this user.",
       );
     }
     const identity: BleIdentity = firmwareIdentity ?? {
@@ -1186,7 +1186,7 @@ export class TrekkerBleBridge {
     );
     const properties = this.argusCharacteristic.properties;
     if (!bleCharacteristicCapabilities(properties).canNotify) {
-      throw new Error("The confirmed ARGUS characteristic does not support notifications.");
+      throw new Error("The confirmed MORAINE characteristic does not support notifications.");
     }
     this.connectionOperation = "notification_subscription";
     await this.argusCharacteristic.startNotifications();
@@ -1199,7 +1199,7 @@ export class TrekkerBleBridge {
     this.handlers.onMessage(
       identity.identitySource === "firmware"
         ? "Wristband verified. Waiting for MAX30102 data."
-        : "ARGUS GATT contract verified using the assigned device. Firmware version is unavailable; waiting for MAX30102 data.",
+        : "MORAINE GATT contract verified using the assigned device. Firmware version is unavailable; waiting for MAX30102 data.",
     );
     this.startLocationRefresh();
 
@@ -1254,7 +1254,7 @@ export class TrekkerBleBridge {
     this.locationTimer = null;
     if (this.manuallyDisconnected || this.destroyed) return;
     this.handlers.onConnection("reconnecting");
-    this.handlers.onMessage("Wristband disconnected. ARGUS is attempting to reconnect.");
+    this.handlers.onMessage("Wristband disconnected. MORAINE is attempting to reconnect.");
     this.scheduleReconnect();
   };
 
@@ -1284,7 +1284,7 @@ export class TrekkerBleBridge {
     if (!value) return;
     const text = decodeBleText(value);
     if (text === null) {
-      this.handlers.onMessage("ARGUS received data from the wristband but could not decode the latest reading.");
+      this.handlers.onMessage("MORAINE received data from the wristband but could not decode the latest reading.");
       return;
     }
     const result = this.packetAssembler.push(text);
@@ -1298,7 +1298,7 @@ export class TrekkerBleBridge {
       parseError: result.parseError,
     });
     if (result.parseError) {
-      this.handlers.onMessage("ARGUS received data from the wristband but could not decode the latest reading.");
+      this.handlers.onMessage("MORAINE received data from the wristband but could not decode the latest reading.");
     }
     for (const packet of result.packets) {
       void this.handleArgusPacket(packet);
@@ -1316,7 +1316,7 @@ export class TrekkerBleBridge {
     }
     const parsed = parseArgusPacket(packet, this.identity?.deviceId);
     if (!parsed) {
-      this.handlers.onMessage("ARGUS received data from the wristband but could not decode the latest reading.");
+      this.handlers.onMessage("MORAINE received data from the wristband but could not decode the latest reading.");
       bleDiagnostic("payload_parsed", {
         messageType: "invalid",
         valid: false,
@@ -1473,7 +1473,7 @@ export class TrekkerBleBridge {
       eventId: sos.eventId,
       status: navigator.onLine ? "sending" : "queued",
       message: navigator.onLine
-        ? "Physical SOS received. Confirming it with ARGUS now."
+        ? "Physical SOS received. Confirming it with MORAINE now."
         : "Physical SOS saved safely on this phone until internet returns.",
     });
     const body: Record<string, unknown> = { ...sos };

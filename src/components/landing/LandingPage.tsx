@@ -100,7 +100,7 @@ export function LandingPage() {
                 When the route changes, the right context should still get through.
               </h2>
               <p className="text-[#4b5e51] leading-relaxed text-sm sm:text-base font-medium">
-                ARGUS connects an assigned safety device, phone location, and an emergency workflow. It never fills gaps with assumptions: unavailable signals remain unavailable, and last-known locations stay clearly labelled.
+                MORAINE connects an assigned safety device, phone location, and an emergency workflow. It never fills gaps with assumptions: unavailable signals remain unavailable, and last-known locations stay clearly labelled.
               </p>
             </div>
 
@@ -142,7 +142,7 @@ export function LandingPage() {
               </h2>
             </div>
             <p className="text-sm font-medium text-[#576b5d] max-w-md">
-              ARGUS surfaces only data that its connected device, phone, and existing response workflow actually provide.
+              MORAINE surfaces only data that its connected device, phone, and existing response workflow actually provide.
             </p>
           </div>
 
@@ -350,14 +350,14 @@ export function LandingPage() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/argus-hardware.jpg"
-                  alt="ARGUS ESP32 expedition wearable displaying real-time OLED Trek Stats (Start Alt, Current Alt, Gain, Speed, Distance) and optical biometric sensor"
+                  alt="MORAINE ESP32 expedition wearable displaying real-time OLED Trek Stats (Start Alt, Current Alt, Gain, Speed, Distance) and optical biometric sensor"
                   className="w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-500"
                 />
                 
                 {/* Real-time Telemetry Overlay Tag */}
                 <div className="absolute bottom-3 left-3 right-3 sm:left-4 sm:right-auto sm:bottom-4 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0a2e1c]/90 backdrop-blur-md text-[#f7f5f0] border border-[#23583b] text-xs font-bold shadow-lg">
                   <span className="w-2 h-2 rounded-full bg-[#22c55e] animate-ping" />
-                  <span>ARGUS ESP32 Hardware &middot; Live OLED Trek Stats &amp; Sensor</span>
+                  <span>MORAINE ESP32 Hardware &middot; Live OLED Trek Stats &amp; Sensor</span>
                   <span className="ml-1 text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-[#14442a] text-[#86efac] border border-[#1b5034]">
                     Initial Prototype
                   </span>
@@ -384,7 +384,7 @@ export function LandingPage() {
                 Cave Rescue Support
               </h2>
               <p className="text-sm font-medium text-[#576b5d] leading-relaxed">
-                For cave explorers and rescue teams, ARGUS carries available device telemetry, SOS state, and responder coordination without claiming underground GPS where no signal exists.
+                For cave explorers and rescue teams, MORAINE carries available device telemetry, SOS state, and responder coordination without claiming underground GPS where no signal exists.
               </p>
             </div>
 
@@ -537,7 +537,7 @@ export function LandingPage() {
             Sarbagya &middot; Ayush &middot; Michael &middot; Raunak
           </strong>
           <span className="block text-xs font-bold text-[#576b5d]">
-            Project ARGUS &middot; Trekker Safety &amp; Emergency Response
+            MORAINE &middot; Trekker Safety &amp; Emergency Response
           </span>
         </section>
       </main>

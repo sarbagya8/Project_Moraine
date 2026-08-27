@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 export function LandingHeader() {
   const [open, setOpen] = useState(false);
@@ -26,16 +27,8 @@ export function LandingHeader() {
   return (
     <header className="sticky top-0 z-50 w-full bg-[#f7f5f0]/90 backdrop-blur-md border-b border-[#d8ded4] transition-all">
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-18">
-        {/* Brand Logo */}
-        <Link href="/" className="inline-flex items-center gap-2.5 text-xl font-black tracking-wider text-[#0a2e1c]">
-          <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-[#0a2e1c] text-[#f7f5f0] text-xs font-bold shadow-sm">
-            ▲
-          </span>
-          <span className="font-extrabold tracking-tight text-lg sm:text-xl">ARGUS</span>
-          <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-[#e6ece2] text-[#2d4b38] border border-[#cdd8c9]">
-            Himalayan Trek Safe
-          </span>
-        </Link>
+        {/* Brand Logo with Mountain Crest Vector & Home Link */}
+        <BrandLogo tag="Himalayan Trek Safe" size="md" />
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-6 lg:gap-8 text-xs font-bold uppercase tracking-wider text-[#405b4a]">

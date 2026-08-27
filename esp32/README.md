@@ -1,8 +1,8 @@
-# ARGUS ESP32-C3 wristband firmware
+# MORAINE ESP32-C3 wristband firmware
 
 The production sketch is `TrekProof_ARGUS/TrekProof_ARGUS.ino`. It integrates
 the uploaded TrekProof firmware (OLED, BMP280, MPU6050, MAX30102 and scheduler)
-with the ARGUS BLE contract. There is no second demo sketch.
+with the existing ARGUS BLE contract. There is no second demo sketch.
 
 ## Confirmed hardware from the uploaded firmware
 

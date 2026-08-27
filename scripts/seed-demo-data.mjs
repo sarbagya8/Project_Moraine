@@ -65,7 +65,7 @@ async function assertSuccess(label, operation) {
     error.code === "PGRST204"
   ) {
     throw new Error(
-      `${label}: the ARGUS schema is incomplete. Apply supabase/migrations/001_initial_schema.sql through 010_argus_hardware_integration.sql in order, then run this command again.`,
+      `${label}: the MORAINE schema is incomplete. Apply supabase/migrations/001_initial_schema.sql through 010_argus_hardware_integration.sql in order, then run this command again.`,
     );
   }
   throw new Error(`${label}: ${error.code || "database error"} ${error.message}`);
@@ -111,7 +111,7 @@ async function removeDemoData() {
 async function seedDemoData() {
   if (reset) {
     await removeDemoData();
-    console.info("ARGUS demo data removed.");
+    console.info("MORAINE demo data removed.");
     return;
   }
 
@@ -126,7 +126,7 @@ async function seedDemoData() {
   });
 
   await assertSuccess(
-    "Check ARGUS schema",
+    "Check MORAINE schema",
     db.from("trekkers").select("id").limit(1),
   );
   await assertSuccess(
@@ -178,7 +178,7 @@ async function seedDemoData() {
     );
   }
 
-  console.info("ARGUS demo data is ready.");
+  console.info("MORAINE demo data is ready.");
   console.info(`Trekker ID: ${DEMO_IDS.trekker}`);
   console.info(`Device ID: ${DEMO_IDS.device}`);
   console.info(`Pairing code: ${DEMO_PAIRING_CODE}`);

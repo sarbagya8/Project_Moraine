@@ -37,7 +37,7 @@ export function calculateSeverity(input: SeverityInput) {
     if (input.spo2 < 90) score += 15;
     else if (input.spo2 < 94) score += 8;
   }
-  // ARGUS receives BMP280 ambient temperature. It is deliberately excluded
+  // MORAINE receives BMP280 ambient temperature. It is deliberately excluded
   // from health-risk scoring and must never be treated as body temperature.
 
   const severityScore = Math.min(100, score);
@@ -93,7 +93,7 @@ export function buildSosMessage(input: {
   rescueUrl: string;
 }) {
   return [
-    "ARGUS SOS ALERT",
+    "MORAINE SOS ALERT",
     "",
     `Name: ${input.name}`,
     `User ID: ${input.trekkerId}`,

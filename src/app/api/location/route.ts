@@ -39,7 +39,7 @@ export const POST = withRequestContext(
     if (input.data.source === "device") {
       return failure(
         "USE_TREKKER_DEVICE_BRIDGE",
-        "ARGUS locations come from authenticated browser geolocation, not the ESP32.",
+        "MORAINE locations come from authenticated browser geolocation, not the ESP32.",
         410,
       );
     } else if (input.data.source === "browser") {

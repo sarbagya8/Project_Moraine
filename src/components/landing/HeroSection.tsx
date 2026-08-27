@@ -20,7 +20,7 @@ export function HeroSection() {
           </h1>
 
           <p className="text-base sm:text-lg text-[#405b4a] max-w-2xl leading-relaxed font-medium">
-            ARGUS helps trekkers carry available device signals, phone location and SOS context into a clear response workflow—without pretending missing data exists.
+            MORAINE helps trekkers carry available device signals, phone location and SOS context into a clear response workflow—without pretending missing data exists.
           </p>
 
           <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -54,7 +54,7 @@ export function HeroSection() {
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80] animate-ping" />
                   <span className="text-xs font-black uppercase tracking-widest text-[#92b8a0]">
-                    ARGUS / EXPEDITION LINK
+                    MORAINE / EXPEDITION LINK
                   </span>
                 </div>
                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#14442a] text-[#86efac] border border-[#1b5034]">

@@ -1,8 +1,8 @@
-# ARGUS
+# MORAINE
 
-ARGUS is a remote health access and emergency response platform. A MAX30102 sends optical samples to an ESP32 wearable, which publishes heart rate, SpO2, sensor state, and physical SOS events over Bluetooth Low Energy. The signed-in User Portal adds phone GPS and forwards validated data to the Next.js backend. Supabase stores the shared health and safety record, and the SOS workflow can notify configured contacts through Meta's official WhatsApp Cloud API.
+MORAINE is a trekker safety and emergency response platform. A MAX30102 sends optical samples to an ESP32 wearable, which publishes heart rate, SpO2, sensor state, and physical SOS events over Bluetooth Low Energy. The signed-in Trekker Portal adds phone GPS and forwards validated data to the Next.js backend. Supabase stores the shared safety record, and the SOS workflow can notify configured contacts through Meta's official WhatsApp Cloud API.
 
-ARGUS supports rescue prioritization. It is not a medical device, does not diagnose illness, and does not guarantee connectivity or rescue.
+MORAINE supports rescue prioritization. It is not a medical device, does not diagnose illness, and does not guarantee connectivity or rescue.
 
 ## Stack
 

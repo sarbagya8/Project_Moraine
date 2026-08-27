@@ -19,7 +19,7 @@ function authorizationError(request: Request, source: string) {
   if (source === "physical_button") {
     return failure(
       "USE_TREKKER_DEVICE_BRIDGE",
-      "Physical ARGUS SOS events must use the authenticated device bridge.",
+      "Physical MORAINE SOS events must use the authenticated device bridge.",
       410,
     );
   }

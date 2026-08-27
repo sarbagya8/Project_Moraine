@@ -22,6 +22,7 @@ import { DeviceConnectionPanel } from "@/components/trekker/device-connection-pa
 import { deviceFreshnessState } from "@/lib/device-freshness";
 import { freshnessState } from "@/lib/telemetry";
 import { NearbyCarePanel } from "@/components/shared/nearby-care-panel";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 const SafetyMap = dynamic(() => import("@/components/shared/safety-map"), {
   ssr: false,
@@ -144,7 +145,7 @@ export function TrekkerPortal() {
               capturedAt: new Date(position.timestamp).toISOString(),
             }),
           });
-          setMessage("Your latest location was shared with ARGUS.");
+          setMessage("Your latest location was shared with MORAINE.");
           await load();
         } catch (reason) {
           setMessage(reason instanceof Error ? reason.message : "Location could not be shared.");
@@ -254,10 +255,7 @@ export function TrekkerPortal() {
     <main className="min-h-screen bg-[#f7f5f0] topo-contour-cream pb-16 px-4 sm:px-6 lg:px-8">
       {/* Top Mobile/Desktop Expedition Navigation */}
       <nav className="max-w-6xl mx-auto flex items-center justify-between py-4 border-b border-[#d8ded4] sticky top-0 z-20 bg-[#f7f5f0]/90 backdrop-blur-md">
-        <Link href="/" className="brand font-black text-xl text-[#0a2e1c]">
-          <span className="flex items-center justify-center w-7 h-7 rounded bg-[#0a2e1c] text-[#f7f5f0] text-xs font-bold">▲</span>
-          <span>ARGUS</span>
-        </Link>
+        <BrandLogo subtitle="Trekker" size="md" />
         <div className="hidden md:flex items-center gap-5 text-xs font-bold uppercase tracking-wider text-[#405b4a]">
           <a href="#cockpit" className="hover:text-[#0a2e1c]">Cockpit</a>
           <a href="#device" className="hover:text-[#0a2e1c]">Device</a>

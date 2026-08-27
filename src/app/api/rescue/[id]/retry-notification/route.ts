@@ -229,7 +229,7 @@ export const POST = withRequestContext<RouteContext>(
           phone_number: phoneNumber,
           provider: "whatsapp",
           status: "queued",
-          message: event.sms_message || "ARGUS SOS alert",
+          message: event.sms_message || "MORAINE SOS alert",
           request_id: context.requestId,
         }).select("id").single<{ id: string }>();
         if (error) throw error;

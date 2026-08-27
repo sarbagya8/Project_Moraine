@@ -8,6 +8,7 @@ import { formatAge, type RescueRecord } from "@/lib/rescue-data";
 import { SensorCharts } from "./sensor-charts";
 import { StatusCard } from "./status-card";
 import { operationalPriority } from "@/lib/portal-api";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 const EmergencyMap = dynamic(() => import("./emergency-map"), {
   ssr: false,
@@ -127,9 +128,7 @@ export function RescueView({ sosId }: RescueViewProps) {
   return (
     <main className="rescue-shell mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6">
       <nav className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <Link href="/" className="font-black tracking-wide text-teal-800">
-          ARGUS
-        </Link>
+        <BrandLogo subtitle="Rescue" size="md" />
         <div className="flex gap-2">
           <button
             type="button"
@@ -296,7 +295,7 @@ export function RescueView({ sosId }: RescueViewProps) {
 
       <p className="rounded-xl border border-slate-200 bg-slate-100 p-4 text-sm text-slate-700">
         {record.disclaimer ||
-          "ARGUS supports emergency response and does not replace professional medical evaluation or emergency services."}
+          "MORAINE supports emergency response and does not replace professional medical evaluation or emergency services."}
       </p>
     </main>
   );

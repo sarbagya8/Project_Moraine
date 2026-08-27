@@ -21,8 +21,8 @@ const connectionStageLabels: Record<BleConnectionStage, string> = {
   device_selected: "Device selected",
   gatt_connecting: "Connecting to GATT",
   gatt_connected: "GATT connected",
-  service_found: "ARGUS service found",
-  characteristic_found: "ARGUS characteristic found",
+  service_found: "MORAINE service found",
+  characteristic_found: "MORAINE characteristic found",
   identity_read: "Device identity read",
   device_verified: "Device verified",
   notifications_started: "Notifications started",
@@ -51,7 +51,7 @@ export function DeviceConnectionPanel({
     useState(false);
   const [message, setMessage] = useState(
     deviceId
-      ? "Ready to connect the assigned ARGUS safety device."
+      ? "Ready to connect the assigned MORAINE safety device."
       : "No safety device is assigned to this trekker.",
   );
   const [reading, setReading] = useState<BleReading | null>(null);
@@ -236,7 +236,7 @@ export function DeviceConnectionPanel({
       {diagnosticFallbackAvailable ? (
         <p className="muted">
           Use the diagnostic chooser only if the wristband did not appear in the
-          service-filtered chooser. ARGUS will still reject devices without the
+          service-filtered chooser. MORAINE will still reject devices without the
           required service, characteristics, identity, and server assignment.
         </p>
       ) : null}

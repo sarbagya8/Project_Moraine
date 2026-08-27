@@ -35,7 +35,7 @@ export async function portalRequest<T>(
       throw new PortalApiError("The request was cancelled.", 0, "REQUEST_ABORTED");
     }
     throw new PortalApiError(
-      "The ARGUS server could not be reached.",
+      "The MORAINE server could not be reached.",
       0,
       "NETWORK_ERROR",
     );

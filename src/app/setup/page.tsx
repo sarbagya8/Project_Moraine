@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SetupConsole } from "@/components/setup-console";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 const steps = [
   {
@@ -16,7 +17,7 @@ const steps = [
   },
   {
     title: "Verify WhatsApp safely",
-    body: "Use the fixed-recipient hello_world smoke test, then configure the approved ARGUS SOS template. Never mark failed attempts as sent.",
+    body: "Use the fixed-recipient hello_world smoke test, then configure the approved MORAINE SOS template. Never mark failed attempts as sent.",
   },
 ];
 
@@ -25,9 +26,7 @@ export default function SetupPage() {
     <main className="setup-shell min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <nav className="flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="font-black tracking-[0.16em] text-teal-800">
-            ARGUS
-          </Link>
+          <BrandLogo size="md" />
           <div className="flex flex-wrap gap-2">
             <Link
               href="/user/login"
@@ -49,7 +48,7 @@ export default function SetupPage() {
             SETUP AND CONNECTION
           </p>
           <h1 className="mt-3 max-w-4xl text-4xl font-black tracking-tight sm:text-5xl">
-            Connect, verify, and field-test ARGUS safely.
+            Connect, verify, and field-test MORAINE safely.
           </h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-300">
             This page checks server readiness and provides a fixed-recipient WhatsApp smoke test. It never displays stored secrets or claims delivery before a verified webhook.
@@ -62,23 +61,21 @@ export default function SetupPage() {
               key={step.title}
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
             >
-              <div className="flex gap-4">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 font-black text-teal-900">
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-900 text-xs font-black text-white">
                   {index + 1}
                 </span>
-                <div>
-                  <h2 className="font-black text-slate-950">{step.title}</h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{step.body}</p>
-                </div>
+                <h2 className="text-base font-black text-slate-900">{step.title}</h2>
               </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{step.body}</p>
             </article>
           ))}
         </section>
 
         <SetupConsole />
 
-        <p className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-          ARGUS is an emergency-support prototype. Keep a charged phone, local emergency contacts, and a manual communication method available during every field test.
+        <p className="mt-8 rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-500">
+          MORAINE is an emergency-support prototype. Keep a charged phone, local emergency contacts, and a manual communication method available during every field test.
         </p>
       </div>
     </main>

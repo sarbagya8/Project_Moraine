@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ARGUS | Trekker Safety & Emergency Response",
-    short_name: "ARGUS",
+    name: "MORAINE | Trekker Safety & Emergency Response",
+    short_name: "MORAINE",
     description:
       "Connected safety devices, location, SOS, and responder coordination for expeditions.",
     start_url: "/",

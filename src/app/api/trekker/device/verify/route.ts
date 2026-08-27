@@ -39,7 +39,7 @@ export const POST = withRequestContext("/api/trekker/device/verify", async (requ
         .eq("id", owner.deviceId)
         .eq("trekker_id", owner.trekkerId),
       context,
-      operation: "verify ARGUS device",
+      operation: "verify MORAINE device",
       table: "devices",
     });
     logInfo(context, "ble.device_verification", {

@@ -6,31 +6,31 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   ),
   title: {
-    default: "ARGUS | Trekker Safety & Emergency Response",
-    template: "%s | ARGUS",
+    default: "MORAINE | Trekker Safety & Emergency Response",
+    template: "%s | MORAINE",
   },
   description:
-    "ARGUS connects trekkers, safety devices, phone location, and responders when an expedition needs support.",
-  applicationName: "ARGUS",
+    "MORAINE connects trekkers, safety devices, phone location, and responders when an expedition needs support.",
+  applicationName: "MORAINE",
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "ARGUS | Trekker Safety & Emergency Response",
+    title: "MORAINE | Trekker Safety & Emergency Response",
     description:
       "A trekker safety platform for available device telemetry, location, SOS, and responder coordination.",
     type: "website",
-    siteName: "ARGUS",
+    siteName: "MORAINE",
     images: [
       {
         url: "/og.png",
         width: 1200,
         height: 630,
-        alt: "ARGUS trekker safety and emergency response platform",
+        alt: "MORAINE trekker safety and emergency response platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ARGUS | Trekker Safety & Emergency Response",
+    title: "MORAINE | Trekker Safety & Emergency Response",
     description:
       "A trekker safety platform connecting expedition signals, SOS, location, and responders.",
     images: ["/og.png"],

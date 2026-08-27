@@ -160,7 +160,7 @@ test("stale-data helpers identify fresh, stale, unavailable, and invalid data", 
   assert.equal(ageSeconds("not-a-date"), Number.MAX_SAFE_INTEGER);
 });
 
-test("SOS message contains the documented ARGUS fields and disclaimer", () => {
+test("SOS message contains the documented MORAINE fields and disclaimer", () => {
   const message = buildSosMessage({
     name: "Demo Trekker",
     trekkerId: "TRK001",
@@ -178,7 +178,7 @@ test("SOS message contains the documented ARGUS fields and disclaimer", () => {
     mapUrl: "https://maps.test",
     rescueUrl: "https://argus.test/rescue/event-id",
   });
-  assert.match(message, /^ARGUS SOS ALERT/);
+  assert.match(message, /^MORAINE SOS ALERT/);
   assert.match(message, /Operational priority: High/);
   assert.match(message, /not a medical diagnosis/);
 });

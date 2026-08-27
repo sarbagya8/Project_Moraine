@@ -1,5 +1,5 @@
 export const SAFETY_DISCLAIMER =
-  "ARGUS supports emergency response and does not replace professional medical evaluation or emergency services.";
+  "MORAINE supports emergency response and does not replace professional medical evaluation or emergency services.";
 
 export const SENSOR_DISCLAIMER =
   "Readings support emergency response only and are not a medical diagnosis.";

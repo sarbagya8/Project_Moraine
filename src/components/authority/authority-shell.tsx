@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { portalRequest } from "@/lib/portal-api";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 const links = [
   ["Command center", "/responder/dashboard"],
@@ -29,7 +30,7 @@ export function AuthorityShell({ children }: { children: ReactNode }) {
   return (
     <div className="portal-layout">
       <header className="mobile-header">
-        <Link href="/responder/dashboard" className="brand">ARGUS</Link>
+        <BrandLogo variant="dark" subtitle="Responder" size="sm" onClick={() => setOpen(false)} />
         <button
           type="button"
           aria-expanded={open}
@@ -40,9 +41,11 @@ export function AuthorityShell({ children }: { children: ReactNode }) {
         </button>
       </header>
       <aside id="responder-navigation" className={open ? "portal-sidebar is-open" : "portal-sidebar"}>
-        <div>
-          <Link href="/responder/dashboard" className="brand">ARGUS</Link>
-          <p className="sidebar-caption">Responder command center</p>
+        <div className="space-y-1">
+          <BrandLogo variant="dark" subtitle="Responder" size="md" onClick={() => setOpen(false)} />
+          <p className="sidebar-caption text-[11px] font-bold tracking-widest text-[#aec0af] pt-1">
+            Responder command center
+          </p>
         </div>
         <nav aria-label="Responder navigation">
           {links.map(([label, href]) => (

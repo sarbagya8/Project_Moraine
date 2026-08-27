@@ -1,8 +1,8 @@
-# ARGUS physical-device integration
+# MORAINE physical-device integration
 
 ## Runtime architecture
 
-ARGUS uses the Next.js App Router. Signed HTTP-only sessions protect the
+MORAINE uses the Next.js App Router. Signed HTTP-only sessions protect the
 Trekker and Authority portals. Server route handlers validate data with Zod,
 verify device assignment against Supabase with the server-only service-role
 client, and pass SOS events to the existing `sos-service.ts` and Meta WhatsApp
@@ -180,9 +180,9 @@ npm run db:check
    non-blocking unavailable message.
 5. Confirm `BLE: advertising as ARGUS-XXXX` appears.
 6. Register the printed `ARGUS-XXXXXXXX` device ID and assign it to the Trekker.
-7. Start ARGUS and open it in Chrome or Edge on localhost or HTTPS.
+7. Start MORAINE and open it in Chrome or Edge on localhost or HTTPS.
 8. Sign in with the assigned Trekker ID and pairing code.
-9. Click **Connect ARGUS device** once.
+9. Click **Connect MORAINE device** once.
 10. Select the physical wristband under its actual advertised name. The current
     production firmware defaults to `ARGUS-XXXX`, but the website does not
     require that name.

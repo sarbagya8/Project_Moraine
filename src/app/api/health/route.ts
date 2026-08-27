@@ -50,7 +50,7 @@ export const GET = withRequestContext("/api/health", async (request) => {
     : { status: "not_checked" as const, hardwareSchemaReady: null };
 
   return success({
-    service: "ARGUS API",
+    service: "MORAINE API",
     status: "ok",
     databaseConfigured: env.databaseConfigured,
     databaseStatus: database.status,

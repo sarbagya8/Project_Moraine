@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 export function LandingFooter() {
   return (
@@ -6,12 +7,7 @@ export function LandingFooter() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10">
         {/* Brand Column */}
         <div className="lg:col-span-2 space-y-4">
-          <Link href="/" className="inline-flex items-center gap-2.5 text-2xl font-black tracking-widest text-[#0a2e1c]">
-            <span className="flex items-center justify-center w-8 h-8 rounded bg-[#0a2e1c] text-[#f7f5f0] text-sm font-bold">
-              ▲
-            </span>
-            <span>ARGUS</span>
-          </Link>
+          <BrandLogo size="lg" />
           <p className="text-sm text-[#405b4a] max-w-sm leading-relaxed">
             Himalayan Trekker Safety &amp; Emergency Response Platform with secondary Cave Rescue support. Engineered for field reliability.
           </p>
@@ -64,11 +60,10 @@ export function LandingFooter() {
             </div>
           </div>
           <div className="text-xs text-[#577060] pt-4">
-            Copyright &copy; {new Date().getFullYear()} ARGUS / Sarbagya Acharya. All rights reserved.
+            Copyright &copy; {new Date().getFullYear()} MORAINE / Sarbagya Acharya. All rights reserved.
           </div>
         </div>
       </div>
     </footer>
   );
 }
-

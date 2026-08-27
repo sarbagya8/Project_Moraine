@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PortalApiError, portalRequest } from "@/lib/portal-api";
+import { BrandLogo } from "@/components/shared/brand-logo";
 
 type UserMode = "login" | "signup" | "forgot" | "legacy";
 
@@ -72,10 +73,12 @@ export function LoginForm({ kind, notice = "" }: { kind: "authority" | "trekker"
   return (
     <main className="login-page">
       <section className="login-card">
-        <Link href="/" className="brand">ARGUS</Link>
+        <div className="mb-4">
+          <BrandLogo subtitle={kind === "authority" ? "Responder" : "Trekker"} size="md" />
+        </div>
         <p className="eyebrow">{kind === "authority" ? "Responder command center" : "Trekker portal"}</p>
         <h1>{title}</h1>
-        <p>{kind === "authority" ? "Use the responder account configured by the ARGUS administrator." : mode === "signup" ? "Create a private trekker account. Emergency contacts and response details are always optional." : mode === "forgot" ? "Enter your account email to receive a secure reset link." : mode === "legacy" ? "Existing device accounts can continue using their Trekker ID and pairing code." : "Sign in with the email and password used for your Trekker account."}</p>
+        <p>{kind === "authority" ? "Use the responder account configured by the MORAINE administrator." : mode === "signup" ? "Create a private trekker account. Emergency contacts and response details are always optional." : mode === "forgot" ? "Enter your account email to receive a secure reset link." : mode === "legacy" ? "Existing device accounts can continue using their Trekker ID and pairing code." : "Sign in with the email and password used for your Trekker account."}</p>
         <form action={(data) => void submit(data)}>
           {kind === "authority" ? (
             <><label htmlFor="username">Username</label><input id="username" name="username" autoComplete="username" required /><label htmlFor="password">Password</label><input id="password" name="password" type="password" autoComplete="current-password" required /></>

@@ -105,7 +105,7 @@ test("database readiness command reports exact operations without printing crede
     new URL("../scripts/check-database-schema.mjs", import.meta.url),
     "utf8",
   );
-  assert.match(checker, /ARGUS device firmware/);
+  assert.match(checker, /MORAINE device firmware/);
   assert.match(checker, /sensor state/);
   assert.match(checker, /physical SOS state/);
   assert.match(checker, /physical SOS identity/);

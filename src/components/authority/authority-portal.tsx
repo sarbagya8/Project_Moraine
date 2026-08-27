@@ -331,7 +331,7 @@ export function AuthorityPortal({
             <p className="eyebrow">Snapshot</p><h2>Emergency context</h2>
             <dl className="detail-list">
               <div><dt>Created</dt><dd>{formatTime(event.createdAt)}</dd></div>
-              <div><dt>ARGUS device</dt><dd>{event.deviceId || "Unavailable"}</dd></div>
+              <div><dt>MORAINE device</dt><dd>{event.deviceId || "Unavailable"}</dd></div>
               <div><dt>Hardware event ID</dt><dd>{event.hardwareEventId || "Unavailable"}</dd></div>
               <div><dt>Source</dt><dd>{sourceLabel(event.source)}</dd></div>
               <div><dt>Sensor validity</dt><dd><StatusBadge value={(event.sensorState || "unavailable").replaceAll("_", " ")} /></dd></div>
@@ -517,12 +517,12 @@ function DeviceManager({ data, refresh }: { data: AuthorityOverview; refresh: ()
   }
   return (
     <>
-      <PageHeading eyebrow="Safety device registry" title="Devices" description="Register hardware, assign a trekker, and monitor the last connection received by ARGUS." />
+      <PageHeading eyebrow="Safety device registry" title="Devices" description="Register hardware, assign a trekker, and monitor the last connection received by MORAINE." />
       <section className="panel">
         <h2>Add a device</h2>
         <form className="inline-form" action={(form) => void createDevice(form)}>
           <label>Device ID<input name="id" required pattern="[A-Za-z0-9_-]{1,100}" /></label>
-          <label>Display name<input name="displayName" maxLength={120} placeholder="ARGUS Safety Device 01" /></label>
+          <label>Display name<input name="displayName" maxLength={120} placeholder="MORAINE Safety Device 01" /></label>
           <label>Assign trekker<select name="trekkerId" defaultValue=""><option value="">Unassigned</option>{data.trekkers.filter((row) => row.isActive).map((row) => <option key={row.id} value={row.id}>{row.name} ({displayUserId(row.id)})</option>)}</select></label>
           <button className="primary-button" type="submit" disabled={Boolean(pendingAction)}>{pendingAction === "create" ? "Adding device…" : "Add device"}</button>
         </form>

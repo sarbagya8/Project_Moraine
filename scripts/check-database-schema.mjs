@@ -42,7 +42,7 @@ if (!url || !serviceRoleKey) {
   });
   const probes = [
     ["core trekker records", "trekkers", "id"],
-    ["ARGUS device firmware", "devices", "id, firmware_version"],
+    ["MORAINE device firmware", "devices", "id, firmware_version"],
     ["device verification timestamp", "devices", "id, last_verified_at"],
     ["sensor state", "sensor_readings", "id, sensor_state"],
     ["pressure", "sensor_readings", "id, pressure"],
@@ -99,10 +99,10 @@ if (!url || !serviceRoleKey) {
 
   if (failed) {
     console.error(
-      "ARGUS schema is incomplete. Apply the missing numbered migrations through 017, then run npm run db:check again.",
+      "MORAINE schema is incomplete. Apply the missing numbered migrations through 017, then run npm run db:check again.",
     );
     process.exitCode = 1;
   } else {
-    console.info("ARGUS database schema is ready.");
+    console.info("MORAINE database schema is ready.");
   }
 }
