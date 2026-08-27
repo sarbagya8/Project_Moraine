@@ -10,7 +10,7 @@ ARGUS uses Meta's official WhatsApp Cloud API through server-side `fetch`. It do
 4. Add and verify the phone number used as `WHATSAPP_RECIPIENT_NUMBER`.
 5. Create a long random webhook verify token.
 6. Copy the Meta app secret.
-7. Keep `DEMO_MODE=true` until the smoke test and database flow are verified.
+7. Keep `DEMO_MODE=true` until the smoke test and database flow are verified
 
 ## Server variables
 
