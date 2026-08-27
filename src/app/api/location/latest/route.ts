@@ -32,7 +32,7 @@ export const GET = withRequestContext(
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
 
       const { data, error } = await getSupabaseServer()
@@ -49,7 +49,7 @@ export const GET = withRequestContext(
       if (!data) {
         return failure(
           "NO_LOCATION",
-          "No location is available for this trekker.",
+          "No location is available for this user.",
           404,
         );
       }

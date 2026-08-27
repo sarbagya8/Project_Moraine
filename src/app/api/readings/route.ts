@@ -64,7 +64,7 @@ export const POST = withRequestContext(
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
 
       const { data: assignedDevice, error: deviceError } = await getSupabaseServer()
@@ -78,7 +78,7 @@ export const POST = withRequestContext(
       if (!assignedDevice) {
         return failure(
           "UNAUTHORIZED_DEVICE",
-          "This device is not assigned to the supplied trekker.",
+          "This device is not assigned to the supplied user.",
           403,
         );
       }

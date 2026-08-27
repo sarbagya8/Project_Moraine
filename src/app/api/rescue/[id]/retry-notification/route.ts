@@ -170,7 +170,7 @@ export const POST = withRequestContext<RouteContext>(
         }>();
       if (trekkerError) throw trekkerError;
       if (!trekker) {
-        return failure("TREKKER_NOT_FOUND", "The trekker was not found.", 404);
+        return failure("TREKKER_NOT_FOUND", "The user was not found.", 404);
       }
       const configuredRecipient = configuredWhatsAppRecipient();
       const recipients = configuredRecipient ? [configuredRecipient] : [];

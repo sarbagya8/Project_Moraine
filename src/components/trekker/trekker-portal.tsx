@@ -11,8 +11,7 @@ import {
   type TrekkerOverview,
 } from "@/lib/portal-api";
 import {
-  DataCard,
-  EmptyState,
+  displayUserId,
   ErrorState,
   formatTime,
   LoadingState,
@@ -21,6 +20,8 @@ import {
 } from "@/components/shared/portal-ui";
 import { DeviceConnectionPanel } from "@/components/trekker/device-connection-panel";
 import { deviceFreshnessState } from "@/lib/device-freshness";
+import { freshnessState } from "@/lib/telemetry";
+import { NearbyCarePanel } from "@/components/shared/nearby-care-panel";
 
 const SafetyMap = dynamic(() => import("@/components/shared/safety-map"), {
   ssr: false,
@@ -31,8 +32,9 @@ const symptomOptions = [
   "Headache",
   "Dizziness",
   "Nausea",
-  "Breathing difficulty",
-  "Extreme tiredness",
+  "Shortness of breath",
+  "Fever or feeling feverish",
+  "Weakness",
   "Chest discomfort",
   "Injury",
   "Other",
@@ -54,14 +56,13 @@ export function TrekkerPortal() {
   const [isActivatingSos, setIsActivatingSos] = useState(false);
   const [activeSos, setActiveSos] = useState<TrekkerEmergency | null>(null);
   const [sosError, setSosError] = useState("");
-  const [sosResult, setSosResult] = useState<TrekkerEmergency | null>(null);
 
   const load = useCallback(async () => {
     try {
       const overview = await portalRequest<TrekkerOverview>("/api/trekker/me");
       setData(overview);
       setActiveSos(
-        overview.emergencies.find((event) => event.status !== "resolved") ?? null,
+        overview.emergencies.find((event) => !["resolved", "cancelled"].includes(event.status)) ?? null,
       );
       setError("");
     } catch (reason) {
@@ -87,7 +88,7 @@ export function TrekkerPortal() {
     setLoggingOut(true);
     try {
       await portalRequest("/api/auth/logout", { method: "POST" });
-      router.replace("/trekker/login");
+      router.replace("/user/login");
       router.refresh();
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Logout could not be completed.");
@@ -107,6 +108,7 @@ export function TrekkerPortal() {
           trekkerId: data.trekker.id,
           symptom: formData.get("symptom"),
           severity: formData.get("severity"),
+          duration: formData.get("duration"),
           notes: formData.get("notes"),
         }),
       });
@@ -197,7 +199,6 @@ export function TrekkerPortal() {
         notificationStatus: result.notificationStatus,
       };
       setActiveSos(confirmedSos);
-      setSosResult(confirmedSos);
       setData((current) => current ? {
         ...current,
         emergencies: [
@@ -211,7 +212,7 @@ export function TrekkerPortal() {
         result.notificationStatus === "sent"
           ? "Emergency activated and WhatsApp alert sent."
           : result.notificationStatus === "failed"
-            ? "Emergency activated, but the WhatsApp alert failed. Authorities can retry it."
+            ? "Emergency activated, but the WhatsApp alert failed. Responders can retry it."
             : "Emergency activated.",
       );
       void load();
@@ -223,7 +224,7 @@ export function TrekkerPortal() {
     }
   }
 
-  if (loading) return <LoadingState label="Loading trekker portal" />;
+  if (loading) return <LoadingState label="Loading Trekker cockpit" />;
   if (error && !data) return <ErrorState message={error} retry={() => void load()} />;
   if (!data) return null;
 
@@ -233,7 +234,8 @@ export function TrekkerPortal() {
   const readingStale =
     !data.latestReading ||
     (data.latestReading.ageSeconds || 0) > data.freshness.readingSeconds;
-  const displayedSos = sosResult ?? activeSos;
+  const readingState = freshnessState(data.latestReading?.capturedAt, data.freshness.readingSeconds);
+  const locationState = freshnessState(data.latestLocation?.capturedAt, data.freshness.locationSeconds);
   const state = data.device
     ? deviceFreshnessState(
         data.device.lastSeenAt,
@@ -245,56 +247,204 @@ export function TrekkerPortal() {
         new Date(data.generatedAt).getTime(),
       )
     : "never_connected";
+  const profileValues = [data.trekker.mobileNumber, data.trekker.dateOfBirth, data.trekker.address, data.trekker.bloodGroup, data.trekker.emergencyContactPhone, data.trekker.allergies, data.trekker.knownConditions, data.trekker.currentMedications, data.trekker.emergencyNotes];
+  const profileCompletion = Math.round((profileValues.filter(Boolean).length / profileValues.length) * 100);
 
   return (
-    <main className="trekker-page">
-      <nav className="trekker-nav">
-        <Link href="/" className="brand">ARGUS</Link>
-        <div>
-          <button className="secondary-button" onClick={() => void load()}>Refresh</button>
-          <button className="secondary-button" disabled={loggingOut} onClick={() => void logout()}>{loggingOut ? "Logging out…" : "Logout"}</button>
+    <main className="min-h-screen bg-[#f7f5f0] topo-contour-cream pb-16 px-4 sm:px-6 lg:px-8">
+      {/* Top Mobile/Desktop Expedition Navigation */}
+      <nav className="max-w-6xl mx-auto flex items-center justify-between py-4 border-b border-[#d8ded4] sticky top-0 z-20 bg-[#f7f5f0]/90 backdrop-blur-md">
+        <Link href="/" className="brand font-black text-xl text-[#0a2e1c]">
+          <span className="flex items-center justify-center w-7 h-7 rounded bg-[#0a2e1c] text-[#f7f5f0] text-xs font-bold">▲</span>
+          <span>ARGUS</span>
+        </Link>
+        <div className="hidden md:flex items-center gap-5 text-xs font-bold uppercase tracking-wider text-[#405b4a]">
+          <a href="#cockpit" className="hover:text-[#0a2e1c]">Cockpit</a>
+          <a href="#device" className="hover:text-[#0a2e1c]">Device</a>
+          <a href="#location" className="hover:text-[#0a2e1c]">Map</a>
+          <a href="#checkin" className="hover:text-[#0a2e1c]">Check-in</a>
+          <a href="#emergency" className="hover:text-[#0a2e1c]">Emergency</a>
+          <Link href="/user/profile" className="text-[#0a2e1c] hover:underline">Profile ({profileCompletion}%)</Link>
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="secondary-button text-xs py-1.5 px-3" onClick={() => void load()}>Refresh</button>
+          <button className="secondary-button text-xs py-1.5 px-3" disabled={loggingOut} onClick={() => void logout()}>
+            {loggingOut ? "Logging out…" : "Logout"}
+          </button>
         </div>
       </nav>
-      <header className="trekker-header">
-        <div>
-          <p className="eyebrow">Trekker portal · {data.trekker.id}</p>
-          <h1>Welcome, {data.trekker.name}</h1>
-          <p>{data.trekker.route || "No route has been assigned"} · Last update: {relativeAge(data.generatedAt)}</p>
-        </div>
-        <div className="header-status"><StatusBadge value={activeSos ? "SOS active" : "Monitoring"} tone={activeSos ? "red" : "green"} /></div>
-      </header>
 
-      {error ? <div className="inline-warning" role="alert">{error}</div> : null}
-      {message ? <div className="form-message" aria-live="polite">{message}</div> : null}
+      <div className="max-w-6xl mx-auto mt-6 space-y-6">
+        {/* Expedition Cockpit Header Banner (Matching Reference Image 4) */}
+        <header className="bg-[#0a2e1c] text-[#f7f5f0] border border-[#14462c] rounded-2xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#14462c] text-[#92b8a0] border border-[#1b5c3b]">
+                  <span className={`w-2 h-2 rounded-full ${state === "online" ? "bg-[#4ade80]" : "bg-[#f59e0b]"}`} />
+                  {state === "online" ? "Device Connected (BLE)" : state === "never_connected" ? "Device Ready (BLE)" : "Signal Stale (BLE)"}
+                </span>
+                <span className="text-xs text-[#92b8a0]">⚡ Field Telemetry</span>
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+                Welcome, {data.trekker.name.split(" ")[0]}.
+              </h1>
+              <p className="text-sm text-[#cbd7ce] mt-1">
+                {data.trekker.route || "Annapurna Circuit Route"} &middot; {displayUserId(data.trekker.id)} &middot; Signal {relativeAge(data.generatedAt)}
+              </p>
+            </div>
+            <div className="flex flex-col sm:items-end gap-2">
+              <StatusBadge value={activeSos ? "SOS Active" : "Safety Monitoring"} tone={activeSos ? "red" : "green"} />
+              <button
+                onClick={() => void shareLocation()}
+                disabled={sharingLocation}
+                className="text-xs font-bold text-[#92b8a0] hover:text-white underline pt-1"
+              >
+                {sharingLocation ? "Updating GPS…" : "📍 Sync GPS Fix"}
+              </button>
+            </div>
+          </div>
+        </header>
 
-      <DeviceConnectionPanel
-        deviceId={data.device?.id ?? null}
-        locationStaleSeconds={data.freshness.locationSeconds}
-        onStoredData={() => void load()}
-      />
+        {error ? <div className="bg-[#fee2e2] border border-[#fca5a5] text-[#b91c1c] p-4 rounded-xl text-sm" role="alert">{error}</div> : null}
+        {message ? <div className="bg-[#edf4ed] border border-[#b8cfbc] text-[#21573b] p-4 rounded-xl text-sm font-semibold" aria-live="polite">{message}</div> : null}
 
-      <section>
-        <div className="section-heading"><div><p className="eyebrow">Current safety status</p><h2>Your latest information</h2></div></div>
-        <div className="summary-grid">
-          <DataCard label="Device" value={<StatusBadge value={state} />} detail={data.device ? `${data.device.id} · last seen ${relativeAge(data.device.lastSeenAt)}` : "No device assigned"} />
-          <DataCard label="Stored heart rate" value={!data.latestReading ? "No stored reading yet" : data.latestReading.heartRate == null ? "Unavailable" : `${data.latestReading.heartRate} bpm`} detail={readingStale ? `Stale database reading from ${relativeAge(data.latestReading?.capturedAt)}` : `Persisted from ${data.latestReading?.deviceId || "assigned device"}`} />
-          <DataCard label="Stored SpO₂" value={data.latestReading?.spo2 == null ? "Unavailable" : `${data.latestReading.spo2}%`} detail="Latest persisted reading; live BLE values appear in the wristband panel above." />
-          <DataCard label="Stored reading time" value={data.latestReading ? formatTime(data.latestReading.capturedAt) : "No stored reading yet"} detail={data.latestReading ? `${readingStale ? "Stale" : "Recent"} · ${data.latestReading.deviceId || "Source device unavailable"}` : "Waiting for a successful wristband database write."} />
-          <DataCard label="Ambient temperature" value={data.latestReading?.temperature == null ? "Unavailable" : `${data.latestReading.temperature} °C`} />
-          <DataCard label="Altitude" value={data.latestReading?.altitude == null ? "Unavailable" : `${data.latestReading.altitude} m`} />
-          <DataCard label="Pressure" value={data.latestReading?.pressure == null ? "Unavailable" : `${data.latestReading.pressure} hPa`} />
-          <DataCard label="Average speed" value={data.latestReading?.averageSpeed == null ? "Unavailable" : `${data.latestReading.averageSpeed} m/s`} />
-          <DataCard label="Distance" value={data.latestReading?.distance == null ? "Unavailable" : `${data.latestReading.distance} m`} />
-          <DataCard label="AMS indicator" value={data.latestReading?.amsStatus ?? "Unavailable"} detail="Device-generated safety indicator; not a diagnosis." />
-          <DataCard label="Fall state" value={!data.latestReading || data.latestReading.fallDetected == null ? "Unavailable" : data.latestReading.fallDetected ? `Detected${data.latestReading.fallType ? ` · ${data.latestReading.fallType}` : ""}` : "Clear"} />
-          <DataCard label="Physical SOS" value={!data.latestReading || data.latestReading.physicalSos == null || data.latestReading.sosCountdown == null ? "Unavailable" : data.latestReading.physicalSos ? "Active" : data.latestReading.sosCountdown ? "Countdown" : "Inactive"} />
-          <DataCard label="Location" value={<StatusBadge value={!data.latestLocation ? "unavailable" : locationStale ? "stale" : "recent"} />} detail={relativeAge(data.latestLocation?.capturedAt)} />
-        </div>
-      </section>
+        {/* Bento Telemetry Grid (Matching Reference Image 4) */}
+        <section id="cockpit" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="eyebrow">Real-Time Expedition Telemetry</p>
+              <h2 className="text-xl font-bold text-[#0a2e1c]">Instrument Readings</h2>
+            </div>
+            <StatusBadge value={readingState} tone={readingStale ? "amber" : "green"} />
+          </div>
 
-      <section className="content-grid">
-        <article className="panel">
-          <div className="section-heading"><div><p className="eyebrow">Your location</p><h2>Latest GPS position</h2></div><button className="secondary-button" disabled={sharingLocation} onClick={() => void shareLocation()}>{sharingLocation ? "Sharing location…" : "Share current location"}</button></div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Altitude Card */}
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[#576b5d]">
+                <span className="text-xs font-bold uppercase tracking-wider">Altitude</span>
+                <span className="text-lg">▲</span>
+              </div>
+              <div className="my-3">
+                <div className="text-3xl font-black text-[#0a2e1c] tabular-nums">
+                  {data.latestReading?.altitude != null ? `${data.latestReading.altitude}m` : "—"}
+                </div>
+                <div className="text-xs text-[#576b5d] mt-1">Barometric Elevation</div>
+              </div>
+            </div>
+
+            {/* Heart Rate Card */}
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[#576b5d]">
+                <span className="text-xs font-bold uppercase tracking-wider">Heart Rate</span>
+                <span className="text-lg text-[#b91c1c]">♥</span>
+              </div>
+              <div className="my-3">
+                <div className="text-3xl font-black text-[#0a2e1c] tabular-nums">
+                  {data.latestReading?.heartRate != null ? `${data.latestReading.heartRate} BPM` : "—"}
+                </div>
+                <div className="text-xs text-[#576b5d] mt-1">Live BLE Sensor</div>
+              </div>
+            </div>
+
+            {/* SpO2 Card */}
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[#576b5d]">
+                <span className="text-xs font-bold uppercase tracking-wider">SpO₂</span>
+                <span className="text-lg text-[#0284c7]">💧</span>
+              </div>
+              <div className="my-3">
+                <div className="text-3xl font-black text-[#0a2e1c] tabular-nums">
+                  {data.latestReading?.spo2 != null ? `${data.latestReading.spo2}%` : "—"}
+                </div>
+                <div className="text-xs text-[#576b5d] mt-1">Blood Oxygen</div>
+              </div>
+            </div>
+
+            {/* Distance Card */}
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between text-[#576b5d]">
+                <span className="text-xs font-bold uppercase tracking-wider">Distance</span>
+                <span className="text-lg">📍</span>
+              </div>
+              <div className="my-3">
+                <div className="text-3xl font-black text-[#0a2e1c] tabular-nums">
+                  {data.latestReading?.distance != null ? `${(data.latestReading.distance / 1000).toFixed(1)} km` : "—"}
+                </div>
+                <div className="text-xs text-[#576b5d] mt-1">Expedition Progress</div>
+              </div>
+            </div>
+
+            {/* Secondary Instrument Row */}
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-4 shadow-sm">
+              <span className="text-xs font-bold uppercase text-[#576b5d] block">Avg Speed</span>
+              <div className="text-xl font-bold text-[#0a2e1c] mt-1">
+                {data.latestReading?.averageSpeed != null ? `${data.latestReading.averageSpeed} m/s` : "—"}
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-4 shadow-sm">
+              <span className="text-xs font-bold uppercase text-[#576b5d] block">Ambient Temp</span>
+              <div className="text-xl font-bold text-[#0a2e1c] mt-1">
+                {data.latestReading?.temperature != null ? `${data.latestReading.temperature} °C` : "—"}
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-4 shadow-sm">
+              <span className="text-xs font-bold uppercase text-[#576b5d] block">Pressure</span>
+              <div className="text-xl font-bold text-[#0a2e1c] mt-1">
+                {data.latestReading?.pressure != null ? `${data.latestReading.pressure} hPa` : "—"}
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#d8ded4] rounded-2xl p-4 shadow-sm">
+              <span className="text-xs font-bold uppercase text-[#576b5d] block">Fall &amp; AMS</span>
+              <div className="text-sm font-bold text-[#0a2e1c] mt-1">
+                {data.latestReading?.fallDetected ? "Fall Detected" : "Fall Clear"} &middot; {data.latestReading?.amsStatus || "Normal"}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* SOS Action Banner (Matching Reference Image 4) */}
+        <section id="emergency" className="sos-panel">
+          <div className="space-y-1">
+            <p className="eyebrow text-[#b91c1c]">Emergency Response</p>
+            <h2>{activeSos ? "SOS Signal Active" : "Emergency Assistance"}</h2>
+            <p className="text-sm text-[#7f1d1d] max-w-xl">
+              {activeSos
+                ? `Active Case Tracking ID: ${activeSos.id}. Responders & WhatsApp alerts notified.`
+                : "Press to package your latest GPS coordinates, sensor telemetry, and notify authorized emergency responders."}
+            </p>
+          </div>
+
+          {activeSos ? (
+            <div className="sos-button sos-button-active flex items-center justify-center" role="status" aria-live="polite">
+              SOS ACTIVE
+            </div>
+          ) : (
+            <button
+              className="sos-button"
+              type="button"
+              disabled={isActivatingSos}
+              onClick={openSosConfirmation}
+            >
+              {isActivatingSos ? "ACTIVATING…" : "Trigger SOS"}
+            </button>
+          )}
+        </section>
+
+        {/* Map & Position Section */}
+        <section id="location" className="bg-white border border-[#d8ded4] rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="eyebrow">Expedition Map &amp; Tracking</p>
+              <h2 className="text-xl font-bold text-[#0a2e1c]">Route &amp; Position</h2>
+            </div>
+            <StatusBadge value={locationState} />
+          </div>
+
           <SafetyMap
             points={data.latestLocation ? [{
               id: data.trekker.id,
@@ -303,66 +453,105 @@ export function TrekkerPortal() {
               accuracyMeters: data.latestLocation.accuracyMeters,
               capturedAt: data.latestLocation.capturedAt,
               label: data.trekker.name,
-              detail: locationStale ? "Stale location — not live" : "Recent location",
+              detail: locationStale ? "Last known location" : "Live GPS position",
               status: locationStale ? "stale" : activeSos ? "active" : "normal",
             }] : []}
             route={data.routeCoordinates}
+            height="26rem"
           />
-          {data.latestLocation ? <a className="text-link map-link" href={`https://www.google.com/maps?q=${data.latestLocation.latitude},${data.latestLocation.longitude}`} target="_blank" rel="noreferrer">Open in an external map</a> : null}
-        </article>
 
-        <article className="panel">
-          <p className="eyebrow">Recent report</p>
-          <h2>How you last felt</h2>
-          {data.symptoms[0] ? (
-            <div className="latest-report">
-              <strong>{data.symptoms[0].symptom}</strong>
-              <StatusBadge value={data.symptoms[0].severity} />
-              <p>{data.symptoms[0].notes || "No note provided"}</p>
-              <small>{formatTime(data.symptoms[0].createdAt)}</small>
+          <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-[#576b5d] pt-2 border-t border-[#d8ded4]">
+            <div>
+              Coordinates: {data.latestLocation ? `${data.latestLocation.latitude.toFixed(5)}, ${data.latestLocation.longitude.toFixed(5)}` : "Unavailable"}
+              {data.latestLocation?.accuracyMeters ? ` (±${Math.round(data.latestLocation.accuracyMeters)}m)` : ""}
             </div>
-          ) : <EmptyState title="No symptom reports yet" />}
-          <hr />
-          <h3>Report how you are feeling</h3>
-          <form className="stacked-form" action={(form) => void reportSymptom(form)}>
-            <label>Symptom<select name="symptom" required>{symptomOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
-            <label>Severity<select name="severity" required defaultValue="unspecified"><option value="mild">Mild</option><option value="moderate">Moderate</option><option value="severe">Severe</option><option value="unspecified">Not sure</option></select></label>
-            <label>Optional note<textarea name="notes" maxLength={500} rows={3} placeholder="Add useful context for the rescue team" /></label>
-            <button className="primary-button" type="submit" disabled={reportingSymptom}>{reportingSymptom ? "Sending report…" : "Send report"}</button>
+            {data.latestLocation ? (
+              <a
+                className="text-link"
+                href={`https://www.google.com/maps?q=${data.latestLocation.latitude},${data.latestLocation.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Google Maps &rarr;
+              </a>
+            ) : null}
+          </div>
+
+          <NearbyCarePanel latitude={data.latestLocation?.latitude} longitude={data.latestLocation?.longitude} userLabel={data.trekker.name} />
+        </section>
+
+        {/* Device Bluetooth Bridge Panel */}
+        <section id="device">
+          <DeviceConnectionPanel
+            deviceId={data.device?.id ?? null}
+            displayName={data.device?.displayName}
+            locationStaleSeconds={data.freshness.locationSeconds}
+            onStoredData={() => void load()}
+          />
+        </section>
+
+        {/* Field Check-In Form */}
+        <section id="checkin" className="bg-white border border-[#d8ded4] rounded-2xl p-6 shadow-sm space-y-4">
+          <p className="eyebrow">Field Check-in</p>
+          <h2 className="text-xl font-bold text-[#0a2e1c]">Report Condition or Symptoms</h2>
+
+          {data.symptoms[0] ? (
+            <div className="bg-[#f4efe6] border border-[#d5cebf] rounded-xl p-4 flex items-start justify-between">
+              <div>
+                <strong className="text-sm font-bold text-[#0a2e1c]">{data.symptoms[0].symptom}</strong>
+                <p className="text-xs text-[#576b5d] mt-0.5">{data.symptoms[0].notes || "No additional note"}</p>
+                <small className="text-[11px] text-[#718276] mt-1 block">Recorded: {formatTime(data.symptoms[0].createdAt)}</small>
+              </div>
+              <StatusBadge value={data.symptoms[0].severity} />
+            </div>
+          ) : null}
+
+          <form className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2" action={(form) => void reportSymptom(form)}>
+            <label>Symptom
+              <select name="symptom" required>
+                {symptomOptions.map((option) => <option key={option}>{option}</option>)}
+              </select>
+            </label>
+            <label>Severity
+              <select name="severity" required defaultValue="unspecified">
+                <option value="mild">Mild</option>
+                <option value="moderate">Moderate</option>
+                <option value="severe">Severe</option>
+                <option value="unspecified">Not sure</option>
+              </select>
+            </label>
+            <label className="sm:col-span-2">Duration
+              <input name="duration" maxLength={100} placeholder="e.g. 2 hours" />
+            </label>
+            <label className="sm:col-span-2">Note for Response Team
+              <textarea name="notes" maxLength={500} rows={2} placeholder="Add useful field context..." />
+            </label>
+            <div className="sm:col-span-2">
+              <button className="primary-button" type="submit" disabled={reportingSymptom}>
+                {reportingSymptom ? "Sending Report…" : "Submit Field Check-in"}
+              </button>
+            </div>
           </form>
-        </article>
-      </section>
+        </section>
+      </div>
 
-      <section className="safety-disclaimer">
-        Sensor readings support safety monitoring and are not a medical diagnosis.
-      </section>
-
-      <section className="sos-panel">
-        <div>
-          <p className="eyebrow">Emergency assistance</p>
-          <h2>{activeSos ? "SOS is active" : "Activate an emergency alert"}</h2>
-          <p>{activeSos ? `Tracking ID: ${activeSos.id}. Notification state: ${activeSos.notificationStatus}.` : "ARGUS will create an emergency snapshot and alert configured trusted contacts. Contact local emergency services when possible."}</p>
-          {displayedSos ? <dl className="compact-details"><div><dt>Tracking ID</dt><dd>{displayedSos.id}</dd></div><div><dt>Created</dt><dd>{formatTime(displayedSos.createdAt)}</dd></div><div><dt>Notification</dt><dd>{displayedSos.notificationStatus}</dd></div><div><dt>Location</dt><dd>{displayedSos.locationIsStale ? "Stale or unavailable" : "Recent"}</dd></div></dl> : null}
-        </div>
-        {activeSos ? (
-          <div className="sos-button" role="status" aria-live="polite">SOS ACTIVE</div>
-        ) : (
-          <button className="sos-button" type="button" disabled={isActivatingSos} onClick={openSosConfirmation}>
-            ACTIVATE SOS
-          </button>
-        )}
-      </section>
-
+      {/* SOS Confirmation Dialog */}
       {isConfirmModalOpen ? (
         <div className="dialog-backdrop" role="presentation" onMouseDown={closeSosConfirmation}>
           <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-sos-title" onMouseDown={(event) => event.stopPropagation()}>
-            <p className="eyebrow">Confirm emergency</p>
-            <h2 id="confirm-sos-title">Activate SOS now?</h2>
-            <p>This will create an emergency record, preserve your latest available GPS and sensor data, and send configured WhatsApp alerts. Only continue for a real emergency or an authorized test.</p>
-            {sosError ? <div className="inline-warning" role="alert">{sosError}</div> : null}
-            <div className="button-row">
-              <button className="secondary-button" type="button" disabled={isActivatingSos} onClick={closeSosConfirmation}>Cancel</button>
-              <button className="danger-button" type="button" disabled={isActivatingSos || Boolean(activeSos)} onClick={() => void activateSos()}>{isActivatingSos ? "Activating SOS…" : activeSos ? "SOS is already active" : "Confirm and activate SOS"}</button>
+            <p className="eyebrow text-[#b91c1c]">Emergency Confirmation</p>
+            <h2 id="confirm-sos-title" className="text-2xl font-black text-[#991b1b]">Activate Emergency SOS?</h2>
+            <p className="text-sm text-[#576b5d] my-3 leading-relaxed">
+              This will immediately package your latest available GPS position, barometric altitude, and wearable telemetry into a high-priority emergency snapshot and transmit WhatsApp alerts.
+            </p>
+            {sosError ? <div className="bg-[#fee2e2] text-[#b91c1c] p-3 rounded-lg text-xs mb-3" role="alert">{sosError}</div> : null}
+            <div className="flex justify-end gap-3 mt-5">
+              <button className="secondary-button" type="button" disabled={isActivatingSos} onClick={closeSosConfirmation}>
+                Cancel
+              </button>
+              <button className="danger-button" type="button" disabled={isActivatingSos || Boolean(activeSos)} onClick={() => void activateSos()}>
+                {isActivatingSos ? "Activating SOS…" : "Confirm and activate SOS"}
+              </button>
             </div>
           </section>
         </div>

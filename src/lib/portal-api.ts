@@ -85,6 +85,7 @@ export type PortalReading = {
 
 export type PortalDevice = {
   id: string;
+  displayName?: string | null;
   trekkerId: string | null;
   trekkerName?: string | null;
   isActive: boolean;
@@ -95,13 +96,26 @@ export type PortalDevice = {
 
 export type PortalTrekker = {
   id: string;
+  email?: string | null;
   name: string;
   route: string | null;
   mobileNumber?: string | null;
   emergencyContact?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
   guideMobile?: string | null;
   bloodGroup?: string | null;
   medicalNotes?: string | null;
+  allergies?: string | null;
+  knownConditions?: string | null;
+  currentMedications?: string | null;
+  dateOfBirth?: string | null;
+  address?: string | null;
+  emergencyNotes?: string | null;
+  emergencyContactRelationship?: string | null;
+  secondaryEmergencyContactName?: string | null;
+  secondaryEmergencyContactPhone?: string | null;
+  preferredLanguage?: string | null;
   isActive: boolean;
   device: PortalDevice | null;
   latestLocation: PortalLocation | null;
@@ -109,6 +123,7 @@ export type PortalTrekker = {
   latestSymptom: {
     symptom: string;
     severity: string;
+    duration?: string | null;
     notes: string | null;
     createdAt: string;
   } | null;
@@ -116,6 +131,7 @@ export type PortalTrekker = {
   symptoms: Array<{
     symptom: string;
     severity: string;
+    duration?: string | null;
     notes: string | null;
     createdAt: string;
   }>;
@@ -130,7 +146,7 @@ export type PortalEmergency = {
   deviceId: string | null;
   hardwareEventId: string | null;
   sensorState: string | null;
-  status: "active" | "acknowledged" | "resolved";
+  status: "active" | "new" | "acknowledged" | "in_progress" | "resolved" | "cancelled";
   notificationStatus: string;
   severityScore: number | null;
   severityLabel: string | null;
@@ -158,7 +174,7 @@ export type PortalEmergency = {
 export type TrekkerEmergency = {
   id: string;
   trekkerId?: string;
-  status: "active" | "acknowledged" | "resolved";
+  status: "active" | "new" | "acknowledged" | "in_progress" | "resolved" | "cancelled";
   notificationStatus: string;
   severityScore: number | null;
   severityLabel: string | null;
@@ -168,6 +184,41 @@ export type TrekkerEmergency = {
   rescueUrl: string | null;
   createdAt: string;
 };
+
+export function visibleCaseStatus(status: string) {
+  return status === "active" ? "new" : status;
+}
+
+export function operationalPriority(input: {
+  source: string;
+  status: string;
+  fallDetected?: boolean | null;
+  symptomSeverity?: string | null;
+  readingIsStale?: boolean;
+  locationIsStale?: boolean;
+}) {
+  const reasons: string[] = [];
+  let level: "low" | "medium" | "high" = "low";
+  if (input.source === "physical_button" || input.source === "web_button") {
+    level = "high";
+    reasons.push("SOS activated");
+  }
+  if (input.fallDetected) {
+    level = "high";
+    reasons.push("fall detected");
+  }
+  if (["active", "new"].includes(input.status)) {
+    if (level === "low") level = "medium";
+    reasons.push("awaiting acknowledgement");
+  }
+  if (input.symptomSeverity === "severe") {
+    level = "high";
+    reasons.push("severe symptom reported");
+  }
+  if (input.readingIsStale) reasons.push("health context is stale");
+  if (input.locationIsStale) reasons.push("location is stale");
+  return { level, explanation: reasons.join("; ") || "no urgent operational signal recorded" };
+}
 
 export type NotificationAttempt = {
   id: string;
@@ -184,6 +235,7 @@ export type NotificationAttempt = {
 export type AuthorityOverview = {
   generatedAt: string;
   hardwareSchemaReady: boolean;
+  healthProfileSchemaReady: boolean;
   freshness: { locationSeconds: number; readingSeconds: number; deviceOnlineSeconds: number; deviceOfflineSeconds: number };
   trekkers: PortalTrekker[];
   devices: PortalDevice[];
@@ -194,8 +246,9 @@ export type AuthorityOverview = {
 export type TrekkerOverview = {
   generatedAt: string;
   hardwareSchemaReady: boolean;
+  healthProfileSchemaReady: boolean;
   freshness: { locationSeconds: number; readingSeconds: number; deviceOnlineSeconds: number; deviceOfflineSeconds: number };
-  trekker: { id: string; name: string; route: string | null };
+  trekker: { id: string; email?: string | null; name: string; route: string | null; dateOfBirth?: string | null; mobileNumber?: string | null; address?: string | null; bloodGroup?: string | null; allergies?: string | null; knownConditions?: string | null; currentMedications?: string | null; emergencyContactName?: string | null; emergencyContactPhone?: string | null; emergencyContactRelationship?: string | null; secondaryEmergencyContactName?: string | null; secondaryEmergencyContactPhone?: string | null; preferredLanguage?: string | null; emergencyContact?: string | null; healthNotes?: string | null; emergencyNotes?: string | null };
   device: PortalDevice | null;
   latestLocation: PortalLocation | null;
   routeCoordinates: Array<{
@@ -210,6 +263,7 @@ export type TrekkerOverview = {
     id: string;
     symptom: string;
     severity: string;
+    duration: string | null;
     notes: string | null;
     createdAt: string;
   }>;

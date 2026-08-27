@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 export function StatusBadge({
   value,
@@ -10,33 +10,35 @@ export function StatusBadge({
 }) {
   const inferred =
     tone ||
-    (["active", "critical", "failed", "offline"].includes(value.toLowerCase())
+    (["new", "critical", "failed", "offline"].includes(value.toLowerCase())
       ? "red"
-      : ["acknowledged", "stale", "pending", "high"].includes(value.toLowerCase())
+      : ["acknowledged", "in progress", "in_progress", "stale", "pending", "high", "medium"].includes(value.toLowerCase())
         ? "amber"
-        : ["resolved", "delivered", "read", "online"].includes(value.toLowerCase())
+        : ["active", "resolved", "delivered", "read", "online", "live", "recent", "connected", "synced", "sent"].includes(value.toLowerCase())
           ? "green"
           : "sage");
   return <span className={`status-badge status-${inferred}`}>{value.replaceAll("_", " ")}</span>;
 }
 
-export function DataCard({
+export const DataCard = memo(function DataCard({
   label,
   value,
   detail,
+  className = "",
 }: {
   label: string;
   value: ReactNode;
   detail?: ReactNode;
+  className?: string;
 }) {
   return (
-    <article className="data-card">
+    <article className={`data-card ${className}`.trim()}>
       <p className="eyebrow">{label}</p>
       <div className="data-value">{value}</div>
       {detail ? <p className="data-detail">{detail}</p> : null}
     </article>
   );
-}
+});
 
 export function EmptyState({
   title,
@@ -123,4 +125,16 @@ export function relativeAge(value: string | null | undefined) {
   if (seconds < 3_600) return `${Math.floor(seconds / 60)} minutes ago`;
   if (seconds < 86_400) return `${Math.floor(seconds / 3_600)} hours ago`;
   return `${Math.floor(seconds / 86_400)} days ago`;
+}
+
+export function displayUserId(value: string) {
+  if (value === "TRK-DEMO-001") return "Trekker 01";
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value)) return "Trekker account";
+  return value.startsWith("TRK-") ? "Trekker account" : value;
+}
+
+export function displayDeviceId(value?: string | null) {
+  if (!value) return "Unassigned";
+  if (value === "ARGUS-ESP32-DEMO-01") return "ARGUS Safety Device 01";
+  return value.startsWith("ARGUS-") ? "ARGUS Safety Device" : value;
 }

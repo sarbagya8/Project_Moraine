@@ -1,6 +1,6 @@
 # ARGUS
 
-ARGUS is a hardware-and-software trekking safety prototype. A MAX30102 sends optical samples to an ESP32 wristband, which publishes heart rate, SpO2, sensor state, and physical SOS events over Bluetooth Low Energy. The signed-in Trekker Portal adds phone GPS and forwards validated data to the Next.js backend. Supabase stores the shared safety record, and the existing SOS workflow can notify configured contacts through Meta's official WhatsApp Cloud API.
+ARGUS is a remote health access and emergency response platform. A MAX30102 sends optical samples to an ESP32 wearable, which publishes heart rate, SpO2, sensor state, and physical SOS events over Bluetooth Low Energy. The signed-in User Portal adds phone GPS and forwards validated data to the Next.js backend. Supabase stores the shared health and safety record, and the SOS workflow can notify configured contacts through Meta's official WhatsApp Cloud API.
 
 ARGUS supports rescue prioritization. It is not a medical device, does not diagnose illness, and does not guarantee connectivity or rescue.
 
@@ -15,15 +15,15 @@ ARGUS supports rescue prioritization. It is not a medical device, does not diagn
 
 ## Frontend portals
 
-- `/authority/login` opens the server-protected rescue portal.
-- `/trekker/login` pairs a trekker to an assigned device and opens a trekker-scoped dashboard.
+- `/responder/login` opens the server-protected Responder Portal.
+- `/user/login` supports Supabase email accounts and preserves legacy pairing access for the existing hardware account.
 - Both portals use the same responsive design system and shared Leaflet map.
 - Protected Next.js APIs keep privileged keys out of browser code.
 
 ## Backend architecture
 
 ```text
-MAX30102 -> ESP32 -> BLE -> trekker browser + phone GPS
+MAX30102 -> ESP32 -> BLE -> User browser + phone GPS
   -> Next.js route handler
   -> validation and source-specific authentication
   -> Supabase telemetry or SOS workflow
@@ -65,6 +65,8 @@ For a new Supabase project, run the numbered files in `supabase/migrations` in o
 13. `013_hardware_contract_reconciliation.sql`
 14. `014_esp32_telemetry_payload.sql`
 15. `015_final_realtime_telemetry_contract.sql`
+16. `016_remote_health_access_extensions.sql`
+17. `017_user_accounts_and_device_ownership.sql`
 
 After the migrations, run `npm run seed:demo` for the explicit local/hackathon dataset. Use `npm run seed:demo:active-sos` only when an active simulated SOS is wanted. Run `npm run seed:demo:reset` to remove those stable records. On an existing project, back up first and apply only missing migrations. Do not edit migrations that have already been applied.
 
@@ -82,8 +84,8 @@ invent legacy sensor state or zero values when the final schema is absent.
 
 The read-only `npm run db:audit-demo` command classifies hosted records without
 printing secrets or exact GPS coordinates. Review
-`supabase/cleanup/preview_demo_test_rows.sql` before separately approving and
-running `supabase/cleanup/cleanup_demo_test_rows.sql`. The cleanup preserves the
+`supabase/cleanup/preview_development_data.sql` before separately approving and
+running `supabase/cleanup/final_clean_operational_state.sql`. The cleanup preserves the
 current `TRK-DEMO-001` / `ARGUS-ESP32-DEMO-01` physical assignment.
 
 For a CLI-linked project, the exact schema workflow is:
@@ -105,7 +107,7 @@ The service-role key is used only by server code. RLS stays enabled, and direct 
 
 Copy `.env.example`. The main groups are:
 
-- Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Supabase: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - server authentication: `DEVICE_API_KEY`, `ADMIN_API_KEY`
 - portal authentication: `AUTHORITY_USERNAME`, `AUTHORITY_PASSWORD_HASH`, `SESSION_SECRET`, `SESSION_MAX_AGE_SECONDS`
 - URLs and safety: `NEXT_PUBLIC_APP_URL`, `DEMO_MODE`
@@ -129,7 +131,7 @@ See `.env.example` and `WHATSAPP_SETUP.md`.
 - `POST /api/notifications/whatsapp/test` — administrative authentication and fixed recipient
 - `GET|POST /api/webhooks/whatsapp` — Meta verification and signed status events
 
-Portal APIs also include `POST /api/auth/authority/login`, `POST /api/auth/trekker/login`, `GET /api/authority/overview`, `GET /api/trekker/me`, and the authority-protected `/api/devices` routes.
+Portal APIs also include responder login, User signup/login/password recovery, `GET /api/authority/overview`, `GET /api/trekker/me`, and the responder-protected `/api/devices` routes.
 
 All JSON APIs use `{ "success": true, "data": ... }` or a safe error envelope. Responses include `x-request-id` and `Cache-Control: no-store`.
 
@@ -178,7 +180,7 @@ Use `npm run seed:demo` only for a local or non-production demonstration.
 
 ## Limitations
 
-- One configured authority account and signed cookie sessions are suitable for a hackathon MVP, not multi-user staff identity management.
+- Responder creation remains a controlled environment/admin operation; public signup creates User accounts only.
 - In-memory rate limiting is per application instance.
 - Rescue Passport URLs depend on unguessable UUIDs rather than user login.
 - Web Bluetooth requires a supported Chromium browser, HTTPS or localhost, and an active phone connection.

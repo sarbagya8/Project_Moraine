@@ -49,7 +49,7 @@ export const POST = withRequestContext(
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
 
       const { data, error } = await getSupabaseServer()

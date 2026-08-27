@@ -42,6 +42,8 @@ const {
   whatsappConfigurationReady,
 } = jiti("../src/lib/whatsapp-protocol.ts");
 const { buildSosTemplatePayload } = jiti("../src/lib/whatsapp-protocol.ts");
+const { normalizeStoredReading, freshnessState } = jiti("../src/lib/telemetry.ts");
+const { distanceMeters, normalizeOverpassFacilities } = jiti("../src/lib/nearby-care.ts");
 
 const timestamp = new Date().toISOString();
 const routeFixture = [
@@ -177,7 +179,7 @@ test("SOS message contains the documented ARGUS fields and disclaimer", () => {
     rescueUrl: "https://argus.test/rescue/event-id",
   });
   assert.match(message, /^ARGUS SOS ALERT/);
-  assert.match(message, /Severity: high \(62\/100\)/);
+  assert.match(message, /Operational priority: High/);
   assert.match(message, /not a medical diagnosis/);
 });
 
@@ -377,14 +379,50 @@ test("WhatsApp webhook status mapping validates shape and prevents downgrades", 
   assert.match(invalidTimestamp?.[0].occurredAt || "", /^\d{4}-\d{2}-\d{2}T/);
 });
 
-test("rescue status validation allows only active, acknowledged, and resolved", () => {
-  for (const status of ["active", "acknowledged", "resolved"]) {
+test("case status validation supports the remote-health lifecycle", () => {
+  for (const status of ["new", "acknowledged", "in_progress", "resolved", "cancelled"]) {
     assert.equal(updateSosStatusSchema.safeParse({ status }).success, true);
   }
   assert.equal(
-    updateSosStatusSchema.safeParse({ status: "cancelled" }).success,
+    updateSosStatusSchema.safeParse({ status: "unknown" }).success,
     false,
   );
+});
+
+test("shared telemetry normalization keeps User and Responder values identical", () => {
+  const capturedAt = new Date().toISOString();
+  const reading = normalizeStoredReading({
+    device_id: "ARGUS-01", heart_rate: 82, spo2: 97, altitude: 1410, temperature: 22.5,
+    pressure: 850, start_altitude: 1400, current_altitude: 1410, average_speed: 1.1,
+    distance: 120, ams_status: "normal", fall_detected: false, fall_type: null,
+    sos_countdown: false, sos_active: false, sensor_state: "valid", captured_at: capturedAt,
+  });
+  assert.deepEqual(
+    [reading.heartRate, reading.spo2, reading.pressure, reading.temperature, reading.fallDetected, reading.deviceId],
+    [82, 97, 850, 22.5, false, "ARGUS-01"],
+  );
+  assert.equal(freshnessState(capturedAt, 120), "live");
+  assert.equal(freshnessState(null, 120), "unavailable");
+});
+
+test("Nearby Care normalizes real provider rows and sorts by distance", () => {
+  const facilities = normalizeOverpassFacilities([
+    { type: "node", id: 2, lat: 27.72, lon: 85.33, tags: { healthcare: "clinic", name: "Clinic B" } },
+    { type: "node", id: 1, lat: 27.7101, lon: 85.3201, tags: { amenity: "hospital", name: "Hospital A" } },
+  ], 27.71, 85.32);
+  assert.equal(facilities[0].name, "Hospital A");
+  assert.equal(facilities[0].type, "Hospital");
+  assert.ok(distanceMeters(27.71, 85.32, 27.7101, 85.3201) < 100);
+  assert.match(facilities[0].mapsUrl, /openstreetmap\.org\/directions/);
+});
+
+test("remote health migration adds the case lifecycle without weakening RLS", () => {
+  const migration = readFileSync(new URL("../supabase/migrations/016_remote_health_access_extensions.sql", import.meta.url), "utf8");
+  assert.match(migration, /status in \('new','acknowledged','in_progress','resolved','cancelled'\)/);
+  assert.match(migration, /create table if not exists public\.case_events/);
+  assert.match(migration, /alter table public\.case_events enable row level security/);
+  assert.match(migration, /revoke all on table public\.case_events from anon, authenticated/);
+  assert.match(migration, /status in \('new','acknowledged','in_progress'\)/);
 });
 
 test("demo SOS requests require authority access", () => {

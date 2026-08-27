@@ -1,21 +1,24 @@
 import { failure, success } from "@/lib/api-response";
 import { databaseError } from "@/lib/api-route-support";
-import { withHardwareSchemaFallback } from "@/lib/database-schema";
+import { withHardwareSchemaFallback, withHealthProfileSchemaFallback } from "@/lib/database-schema";
 import { env } from "@/lib/env";
 import { ageSeconds } from "@/lib/map-links";
 import { requestSession } from "@/lib/portal-auth";
 import { withRequestContext } from "@/lib/request-context";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { visibleCaseStatus } from "@/lib/portal-api";
+import { normalizeStoredReading } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
 
 type TrekkerDeviceRow = {
   id: string;
+  display_name: string | null;
   is_active: boolean;
   last_seen_at: string | null;
   firmware_version: string | null;
 };
-type LegacyTrekkerDeviceRow = Omit<TrekkerDeviceRow, "firmware_version">;
+type LegacyTrekkerDeviceRow = Omit<TrekkerDeviceRow, "firmware_version" | "display_name">;
 
 type TrekkerReadingRow = {
   heart_rate: number | null;
@@ -42,35 +45,65 @@ type LegacyTrekkerReadingRow = Pick<
   "heart_rate" | "spo2" | "altitude" | "temperature" | "device_id" | "captured_at" | "request_id"
 >;
 
+type UserProfileRow = {
+  id: string;
+  email: string | null;
+  name: string;
+  route_name: string | null;
+  is_active: boolean;
+  mobile_number: string | null;
+  emergency_contact: string | null;
+  blood_group: string | null;
+  medical_notes: string | null;
+  date_of_birth: string | null;
+  address: string | null;
+  allergies: string | null;
+  known_conditions: string | null;
+  current_medications: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_notes: string | null;
+  emergency_contact_relationship: string | null;
+  secondary_emergency_contact_name: string | null;
+  secondary_emergency_contact_phone: string | null;
+  preferred_language: string | null;
+};
+
+type LegacyUserProfileRow = Pick<UserProfileRow, "id" | "name" | "route_name" | "is_active" | "mobile_number" | "emergency_contact" | "blood_group" | "medical_notes">;
+type SymptomRow = { id: string; symptom: string; severity: string; duration: string | null; notes: string | null; created_at: string };
+type LegacySymptomRow = Omit<SymptomRow, "duration">;
+
 export const GET = withRequestContext(
   "/api/trekker/me",
   async (request, _routeContext, context) => {
   const session = requestSession(request);
   if (!session) return failure("UNAUTHENTICATED", "Sign in is required.", 401);
   if (session.role !== "trekker") {
-    return failure("FORBIDDEN", "Trekker access is required.", 403);
+    return failure("FORBIDDEN", "User Portal access is required.", 403);
   }
   try {
     const db = getSupabaseServer();
     const trekkerId = session.subject;
-    const [profile, deviceResult, locations, readingsResult, symptoms, emergencies] =
+    const [profileResult, deviceResult, locations, readingsResult, symptoms, emergencies] =
       await Promise.all([
-        db
-          .from("trekkers")
-          .select("id, name, route_name, is_active")
-          .eq("id", trekkerId)
-          .eq("is_active", true)
-          .maybeSingle(),
+        withHealthProfileSchemaFallback<UserProfileRow, LegacyUserProfileRow>({
+          enriched: () => db.from("trekkers").select("id, email, name, route_name, is_active, mobile_number, emergency_contact, blood_group, medical_notes, date_of_birth, address, allergies, known_conditions, current_medications, emergency_contact_name, emergency_contact_phone, emergency_contact_relationship, secondary_emergency_contact_name, secondary_emergency_contact_phone, preferred_language, emergency_notes").eq("id", trekkerId).eq("is_active", true).maybeSingle<UserProfileRow>(),
+          legacy: () => db.from("trekkers").select("id, name, route_name, is_active, mobile_number, emergency_contact, blood_group, medical_notes").eq("id", trekkerId).eq("is_active", true).maybeSingle<LegacyUserProfileRow>(),
+          adaptLegacy: (row) => row ? { ...row, email: null, date_of_birth: null, address: null, allergies: null, known_conditions: null, current_medications: null, emergency_contact_name: null, emergency_contact_phone: row.emergency_contact, emergency_contact_relationship: null, secondary_emergency_contact_name: null, secondary_emergency_contact_phone: null, preferred_language: null, emergency_notes: null } : null,
+          context,
+          operation: "load user health profile",
+          table: "trekkers",
+        }),
         withHardwareSchemaFallback<TrekkerDeviceRow, LegacyTrekkerDeviceRow>({
           enriched: () => db.from("devices")
-            .select("id, is_active, last_seen_at, firmware_version")
+            .select("id, display_name, is_active, last_seen_at, firmware_version")
             .eq("trekker_id", trekkerId)
             .maybeSingle<TrekkerDeviceRow>(),
           legacy: () => db.from("devices")
             .select("id, is_active, last_seen_at")
             .eq("trekker_id", trekkerId)
             .maybeSingle<LegacyTrekkerDeviceRow>(),
-          adaptLegacy: (row) => row ? { ...row, firmware_version: null } : null,
+          adaptLegacy: (row) => row ? { ...row, display_name: null, firmware_version: null } : null,
           context,
           operation: "load trekker device",
           table: "devices",
@@ -113,12 +146,14 @@ export const GET = withRequestContext(
           operation: "load trekker sensor readings",
           table: "sensor_readings",
         }),
-        db
-          .from("symptom_reports")
-          .select("id, symptom, severity, notes, created_at")
-          .eq("trekker_id", trekkerId)
-          .order("created_at", { ascending: false })
-          .limit(10),
+        withHealthProfileSchemaFallback<SymptomRow[], LegacySymptomRow[]>({
+          enriched: () => db.from("symptom_reports").select("id, symptom, severity, duration, notes, created_at").eq("trekker_id", trekkerId).order("created_at", { ascending: false }).limit(10).returns<SymptomRow[]>(),
+          legacy: () => db.from("symptom_reports").select("id, symptom, severity, notes, created_at").eq("trekker_id", trekkerId).order("created_at", { ascending: false }).limit(10).returns<LegacySymptomRow[]>(),
+          adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, duration: null })),
+          context,
+          operation: "load user symptoms",
+          table: "symptom_reports",
+        }),
         db
           .from("sos_events")
           .select(
@@ -129,13 +164,11 @@ export const GET = withRequestContext(
           .limit(10),
       ]);
     const error =
-      profile.error ||
       locations.error ||
-      symptoms.error ||
       emergencies.error;
     if (error) throw error;
-    if (!profile.data) {
-      return failure("TREKKER_NOT_FOUND", "The trekker profile is unavailable.", 404);
+    if (!profileResult.data) {
+      return failure("USER_NOT_FOUND", "The user profile is unavailable.", 404);
     }
     const latestLocation = locations.data?.[0];
     const device = deviceResult.data;
@@ -145,6 +178,7 @@ export const GET = withRequestContext(
       generatedAt: new Date().toISOString(),
       hardwareSchemaReady:
         deviceResult.hardwareSchemaReady && readingsResult.hardwareSchemaReady,
+      healthProfileSchemaReady: profileResult.healthProfileSchemaReady,
       freshness: {
         locationSeconds: env.locationStaleSeconds,
         readingSeconds: env.readingStaleSeconds,
@@ -152,13 +186,31 @@ export const GET = withRequestContext(
         deviceOfflineSeconds: env.deviceOfflineSeconds,
       },
       trekker: {
-        id: profile.data.id,
-        name: profile.data.name,
-        route: profile.data.route_name,
+        id: profileResult.data.id,
+        email: profileResult.data.email,
+        name: profileResult.data.name,
+        route: profileResult.data.route_name,
+        dateOfBirth: profileResult.data.date_of_birth,
+        mobileNumber: profileResult.data.mobile_number,
+        address: profileResult.data.address,
+        bloodGroup: profileResult.data.blood_group,
+        allergies: profileResult.data.allergies,
+        knownConditions: profileResult.data.known_conditions,
+        currentMedications: profileResult.data.current_medications,
+        emergencyContactName: profileResult.data.emergency_contact_name,
+        emergencyContactPhone: profileResult.data.emergency_contact_phone || profileResult.data.emergency_contact,
+        emergencyContactRelationship: profileResult.data.emergency_contact_relationship,
+        secondaryEmergencyContactName: profileResult.data.secondary_emergency_contact_name,
+        secondaryEmergencyContactPhone: profileResult.data.secondary_emergency_contact_phone,
+        preferredLanguage: profileResult.data.preferred_language,
+        emergencyContact: profileResult.data.emergency_contact,
+        healthNotes: profileResult.data.medical_notes,
+        emergencyNotes: profileResult.data.emergency_notes,
       },
       device: device
         ? {
             id: device.id,
+            displayName: device.display_name,
             isActive: device.is_active,
             lastSeenAt: device.last_seen_at,
             firmwareVersion: device.firmware_version,
@@ -187,59 +239,19 @@ export const GET = withRequestContext(
           row.accuracy_meters == null ? undefined : Number(row.accuracy_meters),
         capturedAt: row.captured_at,
       })),
-      latestReading: latestReading
-        ? {
-            heartRate: latestReading.heart_rate == null ? null : Number(latestReading.heart_rate),
-            spo2: latestReading.spo2 == null ? null : Number(latestReading.spo2),
-            sensorState: latestReading.sensor_state,
-            altitude:
-              latestReading.altitude == null
-                ? null
-                : Number(latestReading.altitude),
-            temperature: latestReading.temperature == null ? null : Number(latestReading.temperature),
-            pressure: latestReading.pressure == null ? null : Number(latestReading.pressure),
-            startAltitude: latestReading.start_altitude == null ? null : Number(latestReading.start_altitude),
-            currentAltitude: latestReading.current_altitude == null ? null : Number(latestReading.current_altitude),
-            averageSpeed: latestReading.average_speed == null ? null : Number(latestReading.average_speed),
-            distance: latestReading.distance == null ? null : Number(latestReading.distance),
-            amsStatus: latestReading.ams_status,
-            fallDetected: latestReading.fall_detected == null ? null : Boolean(latestReading.fall_detected),
-            fallType: latestReading.fall_type,
-            sosCountdown: latestReading.sos_countdown == null ? null : Boolean(latestReading.sos_countdown),
-            physicalSos: latestReading.sos_active == null ? null : Boolean(latestReading.sos_active),
-            deviceId: latestReading.device_id,
-            capturedAt: latestReading.captured_at,
-            ageSeconds: ageSeconds(latestReading.captured_at),
-          }
-        : null,
-      readingHistory: [...readings].reverse().map((row) => ({
-        heartRate: row.heart_rate == null ? null : Number(row.heart_rate),
-        spo2: row.spo2 == null ? null : Number(row.spo2),
-        sensorState: row.sensor_state,
-        altitude: row.altitude == null ? null : Number(row.altitude),
-        temperature: row.temperature == null ? null : Number(row.temperature),
-        pressure: row.pressure == null ? null : Number(row.pressure),
-        startAltitude: row.start_altitude == null ? null : Number(row.start_altitude),
-        currentAltitude: row.current_altitude == null ? null : Number(row.current_altitude),
-        averageSpeed: row.average_speed == null ? null : Number(row.average_speed),
-        distance: row.distance == null ? null : Number(row.distance),
-        amsStatus: row.ams_status,
-        fallDetected: row.fall_detected == null ? null : Boolean(row.fall_detected),
-        fallType: row.fall_type,
-        sosCountdown: row.sos_countdown == null ? null : Boolean(row.sos_countdown),
-        physicalSos: row.sos_active == null ? null : Boolean(row.sos_active),
-        capturedAt: row.captured_at,
-      })),
+      latestReading: latestReading ? normalizeStoredReading(latestReading) : null,
+      readingHistory: [...readings].reverse().map(normalizeStoredReading),
       symptoms: (symptoms.data || []).map((row) => ({
         id: row.id,
         symptom: row.symptom,
         severity: row.severity,
+        duration: row.duration,
         notes: row.notes,
         createdAt: row.created_at,
       })),
       emergencies: (emergencies.data || []).map((row) => ({
         id: row.id,
-        status: row.status,
+        status: visibleCaseStatus(row.status),
         notificationStatus: row.sms_status,
         severityScore: row.severity_score,
         severityLabel: row.severity_label,

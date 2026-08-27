@@ -4,7 +4,7 @@ import { SetupConsole } from "@/components/setup-console";
 const steps = [
   {
     title: "Apply the database migration",
-    body: "Run migrations 001 through 015 in numeric order. Existing projects with an incomplete hardware schema can apply the idempotent 015 convergence migration.",
+    body: "Run migrations 001 through 016 in numeric order. Existing projects can apply the idempotent migrations without resetting data.",
   },
   {
     title: "Set server environment variables",
@@ -12,7 +12,7 @@ const steps = [
   },
   {
     title: "Keep physical runs real",
-    body: "Use DEMO_MODE=false while checking the ESP32, dashboards, GPS, SOS deduplication, Rescue Passports, and persistence.",
+    body: "Use DEMO_MODE=false while checking the ESP32, dashboards, GPS, SOS duplicate protection, response briefs, and persistence.",
   },
   {
     title: "Verify WhatsApp safely",
@@ -22,7 +22,7 @@ const steps = [
 
 export default function SetupPage() {
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
+    <main className="setup-shell min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <nav className="flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="font-black tracking-[0.16em] text-teal-800">
@@ -30,16 +30,16 @@ export default function SetupPage() {
           </Link>
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/trekker/login"
+              href="/user/login"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold"
             >
-              Trekker
+              Trekker Portal
             </Link>
             <Link
-              href="/authority/login"
+              href="/responder/login"
               className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-bold text-white"
             >
-              Rescue operations
+              Responder Command
             </Link>
           </div>
         </nav>

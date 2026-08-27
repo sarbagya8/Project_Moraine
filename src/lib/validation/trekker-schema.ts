@@ -6,7 +6,7 @@ import {
   trimmedText,
 } from "./shared-schema";
 
-const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
+const bloodGroups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"] as const;
 
 export const createTrekkerSchema = z
   .object({

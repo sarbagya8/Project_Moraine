@@ -2,13 +2,14 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   databaseErrorFields,
+  isHealthProfileMigrationError,
   isHardwareMigrationError,
   type DatabaseLikeError,
 } from "./database-error";
 import type { RequestContext } from "./request-context";
 import { logWarning } from "./request-context";
 
-export { databaseErrorFields, isHardwareMigrationError } from "./database-error";
+export { databaseErrorFields, isHardwareMigrationError, isHealthProfileMigrationError, isCaseWorkflowMigrationError } from "./database-error";
 
 type QueryResult<T> = {
   data: T | null;
@@ -59,6 +60,29 @@ export async function withHardwareSchemaFallback<TFull, TLegacy>(input: {
     data: input.adaptLegacy(legacy.data),
     hardwareSchemaReady: false,
   };
+}
+
+export async function withHealthProfileSchemaFallback<TFull, TLegacy>(input: {
+  enriched: () => PromiseLike<QueryResult<TFull>>;
+  legacy: () => PromiseLike<QueryResult<TLegacy>>;
+  adaptLegacy: (data: TLegacy | null) => TFull | null;
+  context?: RequestContext;
+  operation: string;
+  table: string;
+}) {
+  const enriched = await input.enriched();
+  if (!enriched.error) return { data: enriched.data, healthProfileSchemaReady: true };
+  if (!isHealthProfileMigrationError(enriched.error)) throw enriched.error;
+  if (input.context) {
+    logWarning(input.context, "database.health_profile_schema_fallback", {
+      operation: input.operation,
+      table: input.table,
+      ...databaseErrorFields(enriched.error),
+    });
+  }
+  const legacy = await input.legacy();
+  if (legacy.error) throw legacy.error;
+  return { data: input.adaptLegacy(legacy.data), healthProfileSchemaReady: false };
 }
 
 export async function updateWithHardwareSchemaFallback(input: {

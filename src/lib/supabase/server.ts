@@ -23,3 +23,13 @@ export function getSupabaseServer() {
 
   return client;
 }
+
+export function getSupabaseAuthClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !key) throw new Error("AUTH_NOT_CONFIGURED");
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { "X-Client-Info": "argus-auth" } },
+  });
+}

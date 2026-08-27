@@ -2,14 +2,14 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ARGUS | Connected Trekking Safety",
+    name: "ARGUS | Trekker Safety & Emergency Response",
     short_name: "ARGUS",
     description:
-      "A hardware-and-software trekking safety prototype for trekkers and rescue teams.",
+      "Connected safety devices, location, SOS, and responder coordination for expeditions.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f3eee2",
-    theme_color: "#123e30",
+    background_color: "#f7f6f2",
+    theme_color: "#1a3b2b",
     icons: [{ src: "/favicon.ico", sizes: "any", type: "image/x-icon" }],
   };
 }

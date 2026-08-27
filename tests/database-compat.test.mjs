@@ -128,13 +128,16 @@ test("final telemetry migration is non-destructive and includes every ESP32 fiel
 });
 
 test("cleanup SQL preserves the physical assignment and targets stable seed markers", () => {
-  const preview = readFileSync(new URL("../supabase/cleanup/preview_demo_test_rows.sql", import.meta.url), "utf8");
-  const cleanup = readFileSync(new URL("../supabase/cleanup/cleanup_demo_test_rows.sql", import.meta.url), "utf8");
-  assert.match(preview, /argus-demo-reading-%/);
+  const preview = readFileSync(new URL("../supabase/cleanup/preview_development_data.sql", import.meta.url), "utf8");
+  const cleanup = readFileSync(new URL("../supabase/cleanup/final_clean_operational_state.sql", import.meta.url), "utf8");
+  assert.match(preview, /sensor_readings/);
   assert.match(cleanup, /begin;/i);
   assert.match(cleanup, /commit;/i);
   assert.match(cleanup, /ARGUS-ESP32-DEMO-01/);
+  assert.match(cleanup, /pairing_code_hash/);
   assert.doesNotMatch(cleanup, /delete from public\.devices where id = 'ARGUS-ESP32-DEMO-01'/i);
+  assert.doesNotMatch(cleanup, /delete[^;]+created_at\s*[<>=]/is);
+  assert.doesNotMatch(cleanup, /truncate|drop\s+table/i);
 });
 
 test("production-safe environment example disables demo mode", () => {

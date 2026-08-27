@@ -59,7 +59,7 @@ export const GET = withRequestContext(
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
 
       const db = getSupabaseServer();
@@ -100,7 +100,7 @@ export const GET = withRequestContext(
       if (!data) {
         return failure(
           "NO_SENSOR_READING",
-          "No sensor reading is available for this trekker.",
+          "No sensor reading is available for this user.",
           404,
         );
       }

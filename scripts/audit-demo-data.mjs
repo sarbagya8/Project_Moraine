@@ -54,12 +54,72 @@ const [trekkers, devices, readings, locations, symptoms, sos, attempts] =
   await Promise.all([
     select("trekkers", "id, is_active, created_at"),
     select("devices", "id, trekker_id, is_active, last_seen_at, created_at"),
-    select("sensor_readings", "id, trekker_id, device_id, heart_rate, spo2, altitude, temperature, captured_at, request_id"),
+    select("sensor_readings", "id, trekker_id, device_id, heart_rate, spo2, altitude, temperature, sensor_state, captured_at, request_id"),
     select("locations", "id, trekker_id, source, captured_at, request_id"),
-    select("symptom_reports", "id, trekker_id, symptom, severity, created_at, request_id"),
+    select("symptom_reports", "id, trekker_id, symptom, severity, notes, created_at, request_id"),
     select("sos_events", "id, trekker_id, source, status, sms_status, created_at, request_id"),
     select("sms_attempts", "id, sos_event_id, phone_number, provider, status, created_at, request_id"),
   ]);
+
+if (process.argv.includes("--development-history")) {
+  const accountIds = new Set(["TRK-DEMO-001", "TRK-REPRO-001"]);
+  const developmentCases = sos.filter((row) => accountIds.has(row.trekker_id));
+  const caseIds = new Set(developmentCases.map((row) => row.id));
+  console.info(JSON.stringify({
+    classifiedForRemoval: {
+      sensorReadings: readings.filter((row) => accountIds.has(row.trekker_id)).length,
+      zeroValueReadings: readings.filter((row) => accountIds.has(row.trekker_id) && [row.heart_rate, row.spo2, row.altitude, row.temperature].some((value) => value === 0)).length,
+      noFingerReadings: readings.filter((row) => accountIds.has(row.trekker_id) && row.sensor_state === "no_finger").length,
+      locations: locations.filter((row) => accountIds.has(row.trekker_id)).length,
+      symptoms: symptoms.filter((row) => accountIds.has(row.trekker_id)).length,
+      cases: caseIds.size,
+      notificationAttempts: attempts.filter((row) => caseIds.has(row.sos_event_id)).length,
+      reproDevices: devices.filter((row) => row.id === "ARGUS-REPRO-01" && row.trekker_id === "TRK-REPRO-001").length,
+      reproUsers: trekkers.filter((row) => row.id === "TRK-REPRO-001").length,
+    },
+    symptomKinds: [...new Set(symptoms.filter((row) => accountIds.has(row.trekker_id)).map((row) => row.symptom))].sort(),
+    caseStatuses: Object.fromEntries([...new Set(sos.map((row) => row.status))].sort().map((status) => [status, sos.filter((row) => accountIds.has(row.trekker_id) && row.status === status).length])),
+    notificationStatuses: Object.fromEntries([...new Set(attempts.map((row) => row.status))].sort().map((status) => [status, attempts.filter((row) => caseIds.has(row.sos_event_id) && row.status === status).length])),
+    activeCases: developmentCases.filter((row) => row.status === "active").map(({ id, source, created_at, request_id }) => ({ id, source, created_at, request_id })),
+    preserved: {
+      user: trekkers.find((row) => row.id === "TRK-DEMO-001") || null,
+      device: devices.find((row) => row.id === "ARGUS-ESP32-DEMO-01" && row.trekker_id === "TRK-DEMO-001") || null,
+    },
+  }, null, 2));
+  process.exit(0);
+}
+
+if (process.argv.includes("--cleanup-candidates")) {
+  const seededCases = sos.filter((row) =>
+    row.source === "demo" ||
+    row.request_id?.startsWith("argus-demo-") ||
+    row.trekker_id === "TRK-REPRO-001" ||
+    row.request_id?.startsWith("repro-"),
+  );
+  const legacyResolvedTests = sos.filter((row) =>
+    row.trekker_id === "TRK-DEMO-001" &&
+    row.status === "resolved" &&
+    row.created_at < "2026-08-03T00:00:00Z" &&
+    !seededCases.some((candidate) => candidate.id === row.id),
+  );
+  const removedIds = new Set([...seededCases, ...legacyResolvedTests].map((row) => row.id));
+  const cleanupCounts = {
+    users: trekkers.filter((row) => row.id === "TRK-REPRO-001").length,
+    devices: devices.filter((row) => row.id === "ARGUS-REPRO-01" && row.trekker_id === "TRK-REPRO-001").length,
+    readings: readings.filter((row) => row.trekker_id === "TRK-REPRO-001" || row.request_id?.startsWith("argus-demo-reading-")).length,
+    locations: locations.filter((row) => row.trekker_id === "TRK-REPRO-001" || row.source === "demo" || row.request_id?.startsWith("argus-demo-location-")).length,
+    symptoms: symptoms.filter((row) => row.trekker_id === "TRK-REPRO-001" || row.request_id === "argus-demo-symptom").length,
+    cases: removedIds.size,
+    notifications: attempts.filter((row) => removedIds.has(row.sos_event_id) || ["demo", "whatsapp_demo"].includes(row.provider) || row.request_id?.startsWith("argus-demo-")).length,
+  };
+  console.info(JSON.stringify({
+    cleanupCounts,
+    seededCaseIds: seededCases.map((row) => row.id),
+    legacyResolvedTestCaseIds: legacyResolvedTests.map((row) => row.id),
+    preservedCases: sos.filter((row) => !removedIds.has(row.id)).map(({ id, status, created_at }) => ({ id, status, created_at })),
+  }, null, 2));
+  process.exit(0);
+}
 
 summarize("trekkers", trekkers);
 summarize("devices", devices);

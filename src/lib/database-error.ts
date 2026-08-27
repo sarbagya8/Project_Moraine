@@ -26,6 +26,31 @@ const HARDWARE_COLUMNS = [
   "fall_type",
   "sos_countdown",
   "sos_active",
+  "display_name",
+] as const;
+
+const HEALTH_PROFILE_COLUMNS = [
+  "date_of_birth",
+  "address",
+  "allergies",
+  "known_conditions",
+  "current_medications",
+  "emergency_contact_name",
+  "emergency_contact_phone",
+  "emergency_notes",
+  "duration",
+  "auth_user_id",
+  "email",
+  "preferred_language",
+  "secondary_emergency_contact_name",
+  "secondary_emergency_contact_phone",
+  "emergency_contact_relationship",
+] as const;
+
+const CASE_WORKFLOW_FIELDS = [
+  "acknowledged_at",
+  "in_progress_at",
+  "case_events",
 ] as const;
 
 export function databaseErrorFields(error: unknown) {
@@ -54,4 +79,18 @@ export function isHardwareMigrationError(error: unknown) {
       text.includes(columnName)
     );
   });
+}
+
+export function isHealthProfileMigrationError(error: unknown) {
+  const candidate = error as DatabaseLikeError;
+  if (candidate?.code !== "42703" && candidate?.code !== "PGRST204") return false;
+  const text = `${candidate.message || ""} ${candidate.details || ""}`.toLowerCase();
+  return HEALTH_PROFILE_COLUMNS.some((column) => text.includes(column));
+}
+
+export function isCaseWorkflowMigrationError(error: unknown) {
+  const candidate = error as DatabaseLikeError;
+  if (!["42P01", "42703", "PGRST204", "PGRST205"].includes(candidate?.code || "")) return false;
+  const text = `${candidate.message || ""} ${candidate.details || ""}`.toLowerCase();
+  return CASE_WORKFLOW_FIELDS.some((field) => text.includes(field));
 }

@@ -57,6 +57,10 @@ if (!url || !serviceRoleKey) {
     ["physical SOS state", "sensor_readings", "id, sos_active"],
     ["physical SOS identity", "sos_events", "id, device_id, hardware_event_id"],
     ["browser GPS device link", "locations", "id, device_id"],
+    ["health profile", "trekkers", "id, date_of_birth, address, blood_group, allergies, known_conditions, current_medications, emergency_contact_name, emergency_contact_phone, emergency_notes"],
+    ["Supabase Auth ownership", "trekkers", "id, auth_user_id, email, role"],
+    ["optional profile details", "trekkers", "id, preferred_language, secondary_emergency_contact_name, secondary_emergency_contact_phone, emergency_contact_relationship"],
+    ["device display identity", "devices", "id, display_name"],
   ];
   let failed = false;
   for (const [operation, table, columns] of probes) {
@@ -95,7 +99,7 @@ if (!url || !serviceRoleKey) {
 
   if (failed) {
     console.error(
-      "ARGUS schema is incomplete. Apply supabase/migrations/015_final_realtime_telemetry_contract.sql, then run npm run db:check again.",
+      "ARGUS schema is incomplete. Apply the missing numbered migrations through 017, then run npm run db:check again.",
     );
     process.exitCode = 1;
   } else {

@@ -84,6 +84,7 @@ export type SosDeliveryState = {
 export type DatabaseSyncState =
   | "not started"
   | "syncing"
+  | "pending sync"
   | "synced"
   | "failed";
 
@@ -228,7 +229,7 @@ function connectionActionMessage(operation: string, error: unknown) {
     case "required_characteristic_discovery":
       return `The selected device does not expose ARGUS characteristic ${ARGUS_BLE.characteristic}.`;
     case "backend_device_verification":
-      return "Device verification failed for this signed-in Trekker.";
+      return "Device verification failed for this signed-in user.";
     case "notification_subscription":
       return error instanceof Error
         ? error.message
@@ -1125,7 +1126,7 @@ export class TrekkerBleBridge {
       this.handlers.onConnection("device_mismatch");
       server.disconnect();
       throw new Error(
-        "The selected ARGUS wristband is not the device assigned to this trekker.",
+        "The selected ARGUS wristband is not the device assigned to this user.",
       );
     }
     const identity: BleIdentity = firmwareIdentity ?? {
@@ -1163,7 +1164,7 @@ export class TrekkerBleBridge {
       server.disconnect();
       throw new Error(
         verificationBody?.error?.message ||
-          "This wristband is unknown, unassigned, or assigned to another trekker.",
+          "This wristband is unknown, unassigned, or assigned to another user.",
       );
     }
     this.setConnectionStage("device_verified", {
@@ -1418,7 +1419,7 @@ export class TrekkerBleBridge {
       this.lastReadingPersistedAt = Date.now();
       this.lastPersistedSensorState = reading.sensorState;
       this.lastPersistedTelemetryState = this.telemetryPersistenceState(reading);
-      this.handlers.onSyncState("syncing");
+      this.handlers.onSyncState(navigator.onLine ? "syncing" : "pending sync");
       void this.flushQueue();
     }
     if (Date.now() - this.latestLocationPersistedAt >= LOCATION_PERSIST_MS) {
@@ -1544,7 +1545,7 @@ export class TrekkerBleBridge {
           body,
           createdAt: new Date().toISOString(),
         });
-        this.handlers.onSyncState("syncing");
+        this.handlers.onSyncState(navigator.onLine ? "syncing" : "pending sync");
         this.latestLocationPersistedAt = Date.now();
         void this.flushQueue();
       }
@@ -1607,7 +1608,7 @@ export class TrekkerBleBridge {
             status: "confirmed",
             message: data.duplicate
               ? "This SOS was already recorded; no duplicate alert was sent."
-              : "SOS recorded and the authority workflow was started.",
+              : "SOS recorded and the responder workflow was started.",
             trackingId: data.event?.id,
             notificationStatus: data.event?.notificationStatus ?? "pending",
             duplicate: data.duplicate,

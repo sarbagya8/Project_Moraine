@@ -40,7 +40,7 @@ export function authorityAccessError(request: Request) {
   const session = requestSession(request);
   if (session?.role === "authority" || hasAdminApiKey(request)) return null;
   if (!session) return failure("UNAUTHENTICATED", "Sign in is required.", 401);
-  return failure("FORBIDDEN", "Authority access is required.", 403);
+  return failure("FORBIDDEN", "Responder access is required.", 403);
 }
 
 export function trekkerAccessError(request: Request, trekkerId?: string) {
@@ -50,7 +50,7 @@ export function trekkerAccessError(request: Request, trekkerId?: string) {
     session.role !== "trekker" ||
     (trekkerId !== undefined && session.subject !== trekkerId)
   ) {
-    return failure("FORBIDDEN", "Trekker access is limited to your own profile.", 403);
+    return failure("FORBIDDEN", "User access is limited to your own profile.", 403);
   }
   return null;
 }
@@ -68,5 +68,5 @@ export function authorityOrTrekkerAccessError(
     return null;
   }
   if (!session) return failure("UNAUTHENTICATED", "Sign in is required.", 401);
-  return failure("FORBIDDEN", "Access to this Trekker is not allowed.", 403);
+  return failure("FORBIDDEN", "Access to this user is not allowed.", 403);
 }

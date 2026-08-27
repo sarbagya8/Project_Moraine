@@ -1,7 +1,8 @@
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
 import { authorityAccessError } from "@/lib/api-auth";
+import { requestSession } from "@/lib/portal-auth";
 import { SAFETY_DISCLAIMER } from "@/lib/disclaimer";
-import { withHardwareSchemaFallback } from "@/lib/database-schema";
+import { isCaseWorkflowMigrationError, withHardwareSchemaFallback, withHealthProfileSchemaFallback } from "@/lib/database-schema";
 import { ageSeconds } from "@/lib/map-links";
 import {
   databaseError,
@@ -12,6 +13,8 @@ import { withRequestContext } from "@/lib/request-context";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validation/query-schema";
 import { updateSosStatusSchema } from "@/lib/validation/sos-schema";
+import { normalizeStoredReading, type StoredReading } from "@/lib/telemetry";
+import { visibleCaseStatus } from "@/lib/portal-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +41,9 @@ type RescueDetailEvent = {
   spo2: number | null;
   altitude: number | null;
   temperature: number | null;
+  pressure: number | null;
+  fall_detected: boolean | null;
+  fall_type: string | null;
   sensor_state: string | null;
   reading_captured_at: string | null;
   reading_is_stale: boolean;
@@ -52,23 +58,20 @@ type RescueDetailEvent = {
 
 type LegacyRescueDetailEvent = Omit<
   RescueDetailEvent,
-  "device_id" | "hardware_event_id" | "sensor_state"
+  "device_id" | "hardware_event_id" | "sensor_state" | "pressure" | "fall_detected" | "fall_type"
 >;
 
-type RescueSensorRow = {
-  heart_rate: number | null;
-  spo2: number | null;
-  altitude: number | null;
-  temperature: number | null;
-  sensor_state: string | null;
-  captured_at: string;
-};
+type RescueSensorRow = StoredReading;
+type LegacyRescueSensorRow = Pick<StoredReading, "device_id" | "heart_rate" | "spo2" | "altitude" | "temperature" | "captured_at">;
 
-type LegacyRescueSensorRow = Omit<RescueSensorRow, "sensor_state">;
+type HealthProfileRow = { name: string; route_name: string | null; blood_group: string | null; medical_notes: string | null; date_of_birth: string | null; allergies: string | null; known_conditions: string | null; current_medications: string | null; emergency_contact_name: string | null; emergency_contact_phone: string | null; emergency_contact: string | null; emergency_notes: string | null };
+type LegacyHealthProfileRow = Pick<HealthProfileRow, "name" | "route_name" | "blood_group" | "medical_notes" | "emergency_contact">;
+type SymptomRow = { symptom: string; severity: string; duration: string | null; notes: string | null; created_at: string };
+type LegacySymptomRow = Omit<SymptomRow, "duration">;
 
 export const GET = withRequestContext<RouteContext>(
   "/api/rescue/[id]",
-  async (_request, routeContext, context) => {
+  async (request, routeContext, context) => {
     const { id } = await routeContext.params;
     const parsedId = uuidSchema.safeParse(id);
     if (!parsedId.success) {
@@ -87,7 +90,7 @@ export const GET = withRequestContext<RouteContext>(
         enriched: () => db
           .from("sos_events")
           .select(
-            "id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, sensor_state, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
+            "id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, pressure, fall_detected, fall_type, sensor_state, reading_captured_at, reading_is_stale, symptom, symptom_severity, symptom_notes, map_url, rescue_url, created_at, resolved_at",
           )
           .eq("id", parsedId.data)
           .maybeSingle()
@@ -105,6 +108,9 @@ export const GET = withRequestContext<RouteContext>(
           device_id: null,
           hardware_event_id: null,
           sensor_state: null,
+          pressure: null,
+          fall_detected: null,
+          fall_type: null,
         } : null,
         context,
         operation: "load rescue event",
@@ -114,18 +120,26 @@ export const GET = withRequestContext<RouteContext>(
       if (!event) {
         return failure(
           "SOS_NOT_FOUND",
-          "The Rescue Passport was not found.",
+          "The Emergency Health Passport was not found.",
           404,
         );
+      }
+      const session = requestSession(request);
+      if (!session) return failure("UNAUTHENTICATED", "Sign in is required to view this health information.", 401);
+      if (session.role !== "authority" && (session.role !== "trekker" || session.subject !== event.trekker_id)) {
+        return failure("FORBIDDEN", "You are not authorized to view this case.", 403);
       }
 
       const [trekkerResult, locationsResult, readingsResult, symptomsResult, attemptsResult] =
         await Promise.all([
-          db
-            .from("trekkers")
-            .select("name, route_name, blood_group, medical_notes")
-            .eq("id", event.trekker_id)
-            .single(),
+          withHealthProfileSchemaFallback<HealthProfileRow, LegacyHealthProfileRow>({
+            enriched: () => db.from("trekkers").select("name, route_name, blood_group, medical_notes, date_of_birth, allergies, known_conditions, current_medications, emergency_contact_name, emergency_contact_phone, emergency_contact, emergency_notes").eq("id", event.trekker_id).single<HealthProfileRow>(),
+            legacy: () => db.from("trekkers").select("name, route_name, blood_group, medical_notes, emergency_contact").eq("id", event.trekker_id).single<LegacyHealthProfileRow>(),
+            adaptLegacy: (row) => row ? { ...row, date_of_birth: null, allergies: null, known_conditions: null, current_medications: null, emergency_contact_name: null, emergency_contact_phone: row.emergency_contact, emergency_notes: null } : null,
+            context,
+            operation: "load emergency health profile",
+            table: "trekkers",
+          }),
           db
             .from("locations")
             .select("latitude, longitude, accuracy_meters, captured_at")
@@ -136,40 +150,40 @@ export const GET = withRequestContext<RouteContext>(
           withHardwareSchemaFallback<RescueSensorRow[], LegacyRescueSensorRow[]>({
             enriched: () => db
               .from("sensor_readings")
-              .select("heart_rate, spo2, altitude, temperature, sensor_state, captured_at")
+              .select("device_id, heart_rate, spo2, altitude, temperature, pressure, start_altitude, current_altitude, average_speed, distance, ams_status, fall_detected, fall_type, sos_countdown, sos_active, sensor_state, captured_at")
               .eq("trekker_id", event.trekker_id)
               .order("captured_at", { ascending: false })
               .limit(20)
               .returns<RescueSensorRow[]>(),
             legacy: () => db
               .from("sensor_readings")
-              .select("heart_rate, spo2, altitude, temperature, captured_at")
+              .select("device_id, heart_rate, spo2, altitude, temperature, captured_at")
               .eq("trekker_id", event.trekker_id)
               .order("captured_at", { ascending: false })
               .limit(20)
               .returns<LegacyRescueSensorRow[]>(),
-            adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: null })),
+            adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, sensor_state: null, pressure: null, start_altitude: null, current_altitude: null, average_speed: null, distance: null, ams_status: null, fall_detected: null, fall_type: null, sos_countdown: null, sos_active: null })),
             context,
             operation: "load rescue sensor history",
             table: "sensor_readings",
           }),
-          db
-            .from("symptom_reports")
-            .select("symptom, severity, notes, created_at")
-            .eq("trekker_id", event.trekker_id)
-            .order("created_at", { ascending: false })
-            .limit(10),
+          withHealthProfileSchemaFallback<SymptomRow[], LegacySymptomRow[]>({
+            enriched: () => db.from("symptom_reports").select("symptom, severity, duration, notes, created_at").eq("trekker_id", event.trekker_id).order("created_at", { ascending: false }).limit(10).returns<SymptomRow[]>(),
+            legacy: () => db.from("symptom_reports").select("symptom, severity, notes, created_at").eq("trekker_id", event.trekker_id).order("created_at", { ascending: false }).limit(10).returns<LegacySymptomRow[]>(),
+            adaptLegacy: (rows) => (rows || []).map((row) => ({ ...row, duration: null })),
+            context,
+            operation: "load case symptoms",
+            table: "symptom_reports",
+          }),
           db
             .from("sms_attempts")
-            .select("provider, status, created_at")
+            .select("provider, status, provider_reference, error_message, created_at, sent_at, delivered_at, read_at, failed_at")
             .eq("sos_event_id", event.id)
             .order("created_at", { ascending: true }),
         ]);
 
       const relatedError =
-        trekkerResult.error ||
         locationsResult.error ||
-        symptomsResult.error ||
         attemptsResult.error;
       if (relatedError) throw relatedError;
 
@@ -178,37 +192,56 @@ export const GET = withRequestContext<RouteContext>(
       const symptoms = symptomsResult.data || [];
       const attempts = attemptsResult.data || [];
 
+      const [lifecycleResult, caseEventsResult, deviceResult] = await Promise.all([
+        db.from("sos_events").select("acknowledged_at, in_progress_at").eq("id", event.id).single(),
+        db.from("case_events").select("id, event_type, status, note, actor, created_at").eq("sos_event_id", event.id).order("created_at", { ascending: true }),
+        event.device_id
+          ? db.from("devices").select("last_seen_at, is_active").eq("id", event.device_id).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+      let caseWorkflowReady = true;
+      if (lifecycleResult.error && !isCaseWorkflowMigrationError(lifecycleResult.error)) throw lifecycleResult.error;
+      if (caseEventsResult.error && !isCaseWorkflowMigrationError(caseEventsResult.error)) throw caseEventsResult.error;
+      if (lifecycleResult.error || caseEventsResult.error) caseWorkflowReady = false;
+      if (deviceResult.error) throw deviceResult.error;
+
       const timeline = [
-        ...readings.map((reading) => ({
-          timestamp: reading.captured_at,
+        ...(event.reading_captured_at ? [{
+          timestamp: event.reading_captured_at,
           type: "sensor" as const,
-          message: `Sensor update recorded at ${
-            reading.altitude == null
-              ? "unknown altitude"
-              : `${Math.round(Number(reading.altitude)).toLocaleString("en-US")} m`
-          }`,
-        })),
-        ...symptoms.map((report) => ({
-          timestamp: report.created_at,
+          message: "Wearable context attached to the case",
+        }] : []),
+        ...(event.symptom && symptoms[0] ? [{
+          timestamp: symptoms[0].created_at,
           type: "symptom" as const,
-          message: `${report.symptom} reported (${report.severity})`,
-        })),
-        ...locations.map((location) => ({
-          timestamp: location.captured_at,
+          message: `${event.symptom} reported (${event.symptom_severity || "unspecified"})`,
+        }] : []),
+        ...(event.location_captured_at ? [{
+          timestamp: event.location_captured_at,
           type: "location" as const,
-          message: "Location update recorded",
-        })),
+          message: "Location attached to the case",
+        }] : []),
         {
           timestamp: event.created_at,
           type: "sos" as const,
           message: "SOS activated",
         },
         ...attempts.map((attempt) => ({
-          timestamp: attempt.created_at,
+          timestamp: attempt.read_at || attempt.delivered_at || attempt.sent_at || attempt.failed_at || attempt.created_at,
           type: "notification" as const,
           message: `${attempt.provider || "WhatsApp"} alert ${attempt.status}`,
         })),
-        ...(event.resolved_at
+        ...(caseEventsResult.data || []).map((item) => ({
+          timestamp: item.created_at,
+          type: item.event_type === "responder_note" ? "note" as const : "status" as const,
+          message: item.event_type === "responder_note"
+            ? item.note || "Responder note added"
+            : item.event_type === "case_created"
+              ? "Emergency case created"
+              : `Case marked ${(item.status || "updated").replaceAll("_", " ")}`,
+          actor: item.actor,
+        })),
+        ...(event.resolved_at && !(caseEventsResult.data || []).length
           ? [
               {
                 timestamp: event.resolved_at,
@@ -225,19 +258,29 @@ export const GET = withRequestContext<RouteContext>(
       return success({
         hardwareSchemaReady:
           eventResult.hardwareSchemaReady && readingsResult.hardwareSchemaReady,
+        caseWorkflowReady,
         sos: {
           id: event.id,
           trekkerId: event.trekker_id,
-          trekkerName: trekkerResult.data?.name || "Unknown trekker",
+          trekkerName: trekkerResult.data?.name || "Unknown user",
           route: trekkerResult.data?.route_name || null,
+          dateOfBirth: trekkerResult.data?.date_of_birth || null,
           bloodGroup: trekkerResult.data?.blood_group || null,
+          allergies: trekkerResult.data?.allergies || null,
+          knownConditions: trekkerResult.data?.known_conditions || null,
+          currentMedications: trekkerResult.data?.current_medications || null,
+          emergencyContactName: trekkerResult.data?.emergency_contact_name || null,
+          emergencyContactPhone: trekkerResult.data?.emergency_contact_phone || trekkerResult.data?.emergency_contact || null,
+          emergencyNotes: trekkerResult.data?.emergency_notes || null,
           medicalNotes: trekkerResult.data?.medical_notes || null,
           activatedAt: event.created_at,
           resolvedAt: event.resolved_at,
+          acknowledgedAt: lifecycleResult.data?.acknowledged_at || null,
+          inProgressAt: lifecycleResult.data?.in_progress_at || null,
           source: event.source,
           deviceId: event.device_id,
           hardwareEventId: event.hardware_event_id,
-          status: event.status,
+          status: visibleCaseStatus(event.status),
           notificationStatus: event.sms_status,
           severityScore: event.severity_score,
           severityLabel: event.severity_label,
@@ -250,23 +293,26 @@ export const GET = withRequestContext<RouteContext>(
             ? ageSeconds(event.location_captured_at)
             : null,
           locationIsStale: event.location_is_stale,
-          latestSensorReading:
-            event.heart_rate != null || event.spo2 != null
-              ? {
-                  heartRate:
-                    event.heart_rate == null ? null : Number(event.heart_rate),
-                  spo2: event.spo2 == null ? null : Number(event.spo2),
-                  altitude:
-                    event.altitude == null ? null : Number(event.altitude),
-                  temperature:
-                    event.temperature == null
-                      ? null
-                      : Number(event.temperature),
-                  capturedAt: event.reading_captured_at,
-                  isStale: event.reading_is_stale,
-                  sensorState: event.sensor_state,
-                }
-              : null,
+          latestSensorReading: readings[0]
+            ? { ...normalizeStoredReading(readings[0]), isStale: ageSeconds(readings[0].captured_at) > 120 }
+            : null,
+          caseSensorSnapshot: event.reading_captured_at
+            ? {
+                heartRate: event.heart_rate == null ? null : Number(event.heart_rate),
+                spo2: event.spo2 == null ? null : Number(event.spo2),
+                altitude: event.altitude == null ? null : Number(event.altitude),
+                temperature: event.temperature == null ? null : Number(event.temperature),
+                pressure: event.pressure == null ? null : Number(event.pressure),
+                fallDetected: event.fall_detected,
+                fallType: event.fall_type,
+                capturedAt: event.reading_captured_at,
+                isStale: event.reading_is_stale,
+                sensorState: event.sensor_state,
+              }
+            : null,
+          wearable: deviceResult.data
+            ? { active: deviceResult.data.is_active, lastSeenAt: deviceResult.data.last_seen_at }
+            : null,
           symptom: event.symptom,
           symptomSeverity: event.symptom_severity,
           symptomNotes: event.symptom_notes,
@@ -285,17 +331,13 @@ export const GET = withRequestContext<RouteContext>(
             capturedAt: location.captured_at,
           })),
         sensorHistory: [...readings].reverse().map((reading) => ({
-          heartRate: reading.heart_rate == null ? null : Number(reading.heart_rate),
-          spo2: reading.spo2 == null ? null : Number(reading.spo2),
-          altitude: reading.altitude == null ? null : Number(reading.altitude),
-          temperature: reading.temperature == null ? null : Number(reading.temperature),
-          sensorState: reading.sensor_state,
-          capturedAt: reading.captured_at,
+          ...normalizeStoredReading(reading),
         })),
         latestSymptom: symptoms[0]
           ? {
               symptom: symptoms[0].symptom,
               severity: symptoms[0].severity,
+              duration: symptoms[0].duration,
               notes: symptoms[0].notes,
               createdAt: symptoms[0].created_at,
             }
@@ -303,10 +345,17 @@ export const GET = withRequestContext<RouteContext>(
         notificationAttempts: attempts.map((attempt) => ({
           provider: attempt.provider,
           status: attempt.status,
+          providerReference: attempt.provider_reference,
+          failureReason: attempt.error_message,
           createdAt: attempt.created_at,
+          sentAt: attempt.sent_at,
+          deliveredAt: attempt.delivered_at,
+          readAt: attempt.read_at,
+          failedAt: attempt.failed_at,
         })),
         timeline,
         disclaimer: SAFETY_DISCLAIMER,
+        view: "authenticated_full",
       });
     } catch (error) {
       return databaseError(error, context, { name: "load rescue detail", table: "sos_events" });
@@ -337,21 +386,73 @@ export const PATCH = withRequestContext<RouteContext>(
     }
 
     try {
-      const isClosed = input.data.status === "resolved";
-      const { data, error } = await getSupabaseServer()
+      const db = getSupabaseServer();
+      const { data: existing, error: existingError } = await db
+        .from("sos_events")
+        .select("id, status")
+        .eq("id", parsedId.data)
+        .maybeSingle<{ id: string; status: string }>();
+      if (existingError) throw existingError;
+      if (!existing) return failure("SOS_NOT_FOUND", "The emergency case was not found.", 404);
+
+      const current = visibleCaseStatus(existing.status);
+      const next = input.data.status;
+      const transitions: Record<string, string[]> = {
+        new: ["acknowledged", "cancelled"],
+        acknowledged: ["in_progress", "resolved", "cancelled"],
+        in_progress: ["resolved", "cancelled"],
+        resolved: [],
+        cancelled: [],
+      };
+      if (current !== next && !transitions[current]?.includes(next)) {
+        return failure("INVALID_CASE_TRANSITION", `A ${current.replaceAll("_", " ")} case cannot move to ${next.replaceAll("_", " ")}.`, 409);
+      }
+
+      if (input.data.note || next === "in_progress") {
+        const workflowProbe = await db.from("case_events").select("id").limit(1);
+        if (workflowProbe.error && isCaseWorkflowMigrationError(workflowProbe.error)) {
+          return failure("CASE_WORKFLOW_UNAVAILABLE", "Case notes and in-progress handling are not enabled yet.", 503);
+        }
+        if (workflowProbe.error) throw workflowProbe.error;
+      }
+
+      const now = new Date().toISOString();
+      const isClosed = ["resolved", "cancelled"].includes(next);
+      let updateResult = await db
         .from("sos_events")
         .update({
-          status: input.data.status,
-          resolved_at: isClosed ? new Date().toISOString() : null,
+          status: next,
+          acknowledged_at: next === "acknowledged" ? now : undefined,
+          in_progress_at: next === "in_progress" ? now : undefined,
+          resolved_at: isClosed ? now : null,
         })
         .eq("id", parsedId.data)
-        .select("id, status, resolved_at")
+        .eq("status", existing.status)
+        .select("id, status, acknowledged_at, in_progress_at, resolved_at")
         .maybeSingle();
-      if (error) throw error;
-      if (!data) {
-        return failure("SOS_NOT_FOUND", "The SOS event was not found.", 404);
+      if (updateResult.error && isCaseWorkflowMigrationError(updateResult.error)) {
+        updateResult = await db
+          .from("sos_events")
+          .update({ status: next, resolved_at: isClosed ? now : null })
+          .eq("id", parsedId.data)
+          .eq("status", existing.status)
+          .select("id, status, resolved_at")
+          .maybeSingle();
       }
-      return success({ event: data });
+      if (updateResult.error) throw updateResult.error;
+      if (!updateResult.data) return failure("CASE_CHANGED", "The case changed while this update was being saved. Refresh and try again.", 409);
+
+      if (input.data.note) {
+        const session = requestSession(request);
+        const { error: noteError } = await db.from("case_events").insert({
+          sos_event_id: parsedId.data,
+          event_type: "responder_note",
+          note: input.data.note,
+          actor: session?.subject || "responder",
+        });
+        if (noteError) throw noteError;
+      }
+      return success({ event: { ...updateResult.data, status: visibleCaseStatus(updateResult.data.status) } });
     } catch (error) {
       return databaseError(error, context);
     }

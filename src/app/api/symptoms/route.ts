@@ -1,6 +1,7 @@
 import { failure, readJson, success, validationFailure } from "@/lib/api-response";
 import { authorityOrTrekkerAccessError } from "@/lib/api-auth";
 import { SYMPTOM_DISCLAIMER } from "@/lib/disclaimer";
+import { isHealthProfileMigrationError } from "@/lib/database-schema";
 import { idempotencyKey, isUniqueViolation } from "@/lib/idempotency";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -41,26 +42,36 @@ export const POST = withRequestContext(
 
     try {
       if (!(await activeTrekker(input.data.trekkerId))) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
 
-      const { data, error } = await getSupabaseServer()
+      const db = getSupabaseServer();
+      const payload = {
+        trekker_id: input.data.trekkerId,
+        symptom: input.data.symptom,
+        severity: input.data.severity,
+        duration: input.data.duration || null,
+        notes: input.data.notes || null,
+        request_id: idempotencyKey(request, context.requestId),
+      };
+      let result = await db
         .from("symptom_reports")
-        .insert({
-          trekker_id: input.data.trekkerId,
-          symptom: input.data.symptom,
-          severity: input.data.severity,
-          notes: input.data.notes || null,
-          request_id: idempotencyKey(request, context.requestId),
-        })
+        .insert(payload)
         .select("id, created_at")
         .single<{ id: string; created_at: string }>();
-
-      if (error) throw error;
+      let durationStored = true;
+      if (result.error && isHealthProfileMigrationError(result.error)) {
+        const legacyPayload = { ...payload };
+        delete (legacyPayload as Partial<typeof payload>).duration;
+        result = await db.from("symptom_reports").insert(legacyPayload).select("id, created_at").single<{ id: string; created_at: string }>();
+        durationStored = false;
+      }
+      if (result.error) throw result.error;
       return success(
         {
-          id: data.id,
-          createdAt: data.created_at,
+          id: result.data.id,
+          createdAt: result.data.created_at,
+          durationStored,
           disclaimer: SYMPTOM_DISCLAIMER,
         },
         201,

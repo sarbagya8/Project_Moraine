@@ -21,6 +21,13 @@ export type RescueRecord = {
     trekkerName: string;
     route: string | null;
     bloodGroup?: string | null;
+    dateOfBirth?: string | null;
+    allergies?: string | null;
+    knownConditions?: string | null;
+    currentMedications?: string | null;
+    emergencyContactName?: string | null;
+    emergencyContactPhone?: string | null;
+    emergencyNotes?: string | null;
     medicalNotes?: string | null;
     activatedAt: string;
     resolvedAt?: string | null;

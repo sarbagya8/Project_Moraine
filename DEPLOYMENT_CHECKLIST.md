@@ -5,7 +5,7 @@
 - [ ] Back up the Supabase project.
 - [ ] Apply missing migrations `001` through `015` in order, or apply the idempotent `015` convergence migration to an existing project.
 - [ ] Run `npm run db:check` and require every probe to pass.
-- [ ] Review `supabase/cleanup/preview_demo_test_rows.sql`; run cleanup only after backup and approval.
+- [ ] Review `supabase/cleanup/preview_development_data.sql`; run `final_clean_operational_state.sql` only after backup and approval.
 - [ ] Use `npm run seed:demo` only in a local or non-production hackathon environment.
 - [ ] Confirm RLS is enabled and direct `anon`/`authenticated` access is revoked.
 - [ ] Run `npm run verify`.

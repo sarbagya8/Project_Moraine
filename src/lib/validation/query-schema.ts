@@ -5,7 +5,7 @@ export const latestQuerySchema = z.object({ trekkerId }).strict();
 
 export const rescueListQuerySchema = z
   .object({
-    status: z.enum(["active", "acknowledged", "resolved"]).optional(),
+    status: z.enum(["new", "acknowledged", "in_progress", "resolved", "cancelled"]).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict();

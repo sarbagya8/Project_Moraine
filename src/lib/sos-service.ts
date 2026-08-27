@@ -10,6 +10,7 @@ import {
 import type { NotificationResult } from "./notification";
 import { aggregateNotificationStatus } from "./notification";
 import { ageSeconds } from "./map-links";
+import { visibleCaseStatus } from "./portal-api";
 import type { RequestContext } from "./request-context";
 import { logInfo, logWarning } from "./request-context";
 import {
@@ -77,7 +78,7 @@ async function nonAtomicDevelopmentFallback(
     .from("sos_events")
     .select("id")
     .eq("trekker_id", input.trekkerId)
-    .in("status", ["active", "acknowledged"])
+    .in("status", ["active", "new", "acknowledged", "in_progress"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<{ id: string }>();
@@ -299,7 +300,7 @@ export async function processSos(
   if (!trekker) {
     throw new SosWorkflowError(
       "UNKNOWN_TREKKER",
-      "The trekker was not found.",
+      "The user was not found.",
       404,
     );
   }
@@ -407,7 +408,7 @@ export async function processSos(
     return {
       event: {
         id: existing.id,
-        status: existing.status,
+        status: visibleCaseStatus(existing.status),
         notificationStatus: existing.sms_status,
         severityScore: existing.severity_score,
         severityLabel: existing.severity_label,
@@ -420,7 +421,7 @@ export async function processSos(
       duplicate: true,
       notificationAttempts: [],
       message:
-        "A recent SOS is already active; duplicate alerts were not sent.",
+        "An open emergency case already exists; duplicate alerts were not sent.",
     };
   }
 
@@ -463,9 +464,9 @@ export async function processSos(
 
   const { data: event, error: eventLookupError } = await db
     .from("sos_events")
-    .select("created_at")
+    .select("created_at, status")
     .eq("id", atomic.eventId)
-    .single<{ created_at: string }>();
+    .single<{ created_at: string; status: string }>();
   if (eventLookupError) throw eventLookupError;
 
   const templateValues: SosTemplateValues = {
@@ -527,6 +528,9 @@ export async function processSos(
         device_id: input.deviceId ?? null,
         hardware_event_id:
           input.source === "physical_button" ? requestId : null,
+        fall_detected: input.reading?.fallDetected ?? null,
+        fall_type: input.reading?.fallType ?? null,
+        pressure: input.reading?.pressure ?? null,
         notification_started_at: recipients.length ? new Date().toISOString() : null,
       })
       .eq("id", atomic.eventId),
@@ -656,7 +660,7 @@ export async function processSos(
   return {
     event: {
       id: atomic.eventId,
-      status: "active",
+      status: visibleCaseStatus(event.status),
       notificationStatus,
       severityScore: severity.severityScore,
       severityLabel: severity.severityLabel,

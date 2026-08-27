@@ -163,7 +163,7 @@ export function buildDemoData({
     rows.activeSos = {
       ...resolvedSos,
       id: DEMO_IDS.activeSos,
-      status: "active",
+      status: "new",
       severity_score: 58,
       severity_label: "high",
       rescue_url: `${appUrl.replace(/\/$/, "")}/rescue/${DEMO_IDS.activeSos}`,

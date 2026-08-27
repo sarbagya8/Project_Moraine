@@ -302,7 +302,7 @@ export async function sendWhatsAppSosAlert(
         name: values.name,
         trekkerId: values.trekkerId,
         deviceId: values.deviceId || "unavailable",
-        severity: `${values.severityLabel} (${values.severityScore}/100)`,
+        severity: `${values.severityLabel === "critical" || values.severityLabel === "high" ? "High" : values.severityLabel === "moderate" ? "Medium" : "Low"} operational priority`,
         route: values.route,
         emergencyTime: values.emergencyTime,
         heartRate: values.heartRate,

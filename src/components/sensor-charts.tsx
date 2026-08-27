@@ -14,15 +14,15 @@ import type { SensorReading } from "@/lib/rescue-data";
 type SensorChartsProps = { readings: SensorReading[] };
 
 const charts = [
-  { key: "heartRate", label: "Heart rate", unit: " bpm", color: "#dc2626" },
-  { key: "spo2", label: "SpO₂", unit: "%", color: "#2563eb" },
-  { key: "altitude", label: "Altitude", unit: " m", color: "#0f766e" },
+  { key: "heartRate", label: "Heart rate", unit: " bpm", color: "#1a3b2b" },
+  { key: "spo2", label: "SpO₂", unit: "%", color: "#527a61" },
+  { key: "altitude", label: "Altitude", unit: " m", color: "#9a650d" },
 ] as const;
 
 export function SensorCharts({ readings }: SensorChartsProps) {
   if (readings.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
+      <div className="sensor-empty rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-600">
         No sensor history is available for this rescue record.
       </div>
     );
@@ -41,7 +41,7 @@ export function SensorCharts({ readings }: SensorChartsProps) {
       {charts.map(({ key, label, unit, color }) => (
         <section
           key={key}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          className="sensor-chart rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
         >
           <h3 className="font-bold text-slate-900">{label}</h3>
           <div className="mt-2 h-44" aria-label={`${label} trend chart`}>

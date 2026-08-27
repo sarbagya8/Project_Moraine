@@ -42,7 +42,7 @@ export const GET = withRequestContext<RouteContext>(
         .maybeSingle();
       if (error) throw error;
       if (!data) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
       return success({
         trekker: {
@@ -125,7 +125,7 @@ export const PATCH = withRequestContext<RouteContext>(
         .maybeSingle();
       if (error) throw error;
       if (!data) {
-        return failure("UNKNOWN_TREKKER", "The trekker was not found.", 404);
+        return failure("UNKNOWN_TREKKER", "The user was not found.", 404);
       }
       return success({ trekker: data });
     } catch (error) {

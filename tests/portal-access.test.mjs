@@ -131,19 +131,64 @@ test("trekker pairing hashes isolate credentials from stored values", () => {
   assert.equal(verifyKeyedCode("another-code", stored, secret), false);
 });
 
-test("protected layouts enforce server-side authority and trekker sessions", () => {
-  const authorityLayout = readFileSync(
-    new URL("../src/app/authority/(protected)/layout.tsx", import.meta.url),
+test("User email accounts link one Supabase Auth UUID to one application profile", () => {
+  const migration = readFileSync(new URL("../supabase/migrations/017_user_accounts_and_device_ownership.sql", import.meta.url), "utf8");
+  const signup = readFileSync(new URL("../src/app/api/auth/trekker/signup/route.ts", import.meta.url), "utf8");
+  const login = readFileSync(new URL("../src/app/api/auth/trekker/login/route.ts", import.meta.url), "utf8");
+  assert.match(migration, /auth_user_id uuid references auth\.users\(id\) on delete restrict/);
+  assert.match(migration, /unique index if not exists trekkers_auth_user_id_uidx/);
+  assert.match(migration, /role in \('user','responder','admin'\)/);
+  assert.match(migration, /revoke all[\s\S]*from anon, authenticated/);
+  assert.match(signup, /auth\.signUp/);
+  assert.match(signup, /auth_user_id: auth\.user\.id/);
+  assert.match(signup, /role: "user"/);
+  assert.doesNotMatch(signup, /input\.data\.role/);
+  assert.match(login, /signInWithPassword/);
+  assert.match(login, /\.eq\("auth_user_id", auth\.user\.id\)/);
+  assert.match(login, /profile\.role !== "user"/);
+});
+
+test("Responder assignment and BLE persistence use the same server-owned device relationship", () => {
+  const deviceRoute = readFileSync(new URL("../src/app/api/devices/[id]/route.ts", import.meta.url), "utf8");
+  const bridge = readFileSync(new URL("../src/lib/trekker-device-bridge.ts", import.meta.url), "utf8");
+  assert.match(deviceRoute, /authorityAccessError/);
+  assert.match(deviceRoute, /update\.trekker_id/);
+  assert.match(bridge, /session\.subject/);
+  assert.match(bridge, /\.eq\("trekker_id", session\.subject\)/);
+  assert.match(bridge, /trekker_id: owner\.trekkerId/);
+  assert.doesNotMatch(bridge, /input\.trekkerId/);
+});
+
+test("protected layouts enforce server-side responder and user sessions", () => {
+  const responderLayout = readFileSync(
+    new URL("../src/app/responder/(protected)/layout.tsx", import.meta.url),
     "utf8",
   );
-  const trekkerPage = readFileSync(
-    new URL("../src/app/trekker/dashboard/page.tsx", import.meta.url),
+  const userLayout = readFileSync(
+    new URL("../src/app/user/(protected)/layout.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(authorityLayout, /currentSession/);
-  assert.match(authorityLayout, /redirect\("\/authority\/login"\)/);
-  assert.match(trekkerPage, /currentSession/);
-  assert.match(trekkerPage, /redirect\("\/trekker\/login"\)/);
+  assert.match(responderLayout, /currentSession/);
+  assert.match(responderLayout, /redirect\("\/responder\/login"\)/);
+  assert.match(userLayout, /currentSession/);
+  assert.match(userLayout, /redirect\("\/user\/login"\)/);
+  assert.doesNotMatch(responderLayout, /redirect\("\/user\/dashboard"\)/);
+  assert.doesNotMatch(userLayout, /redirect\("\/responder\/dashboard"\)/);
+});
+
+test("portal login pages never redirect an opposite-role session", () => {
+  const responderLogin = readFileSync(
+    new URL("../src/app/responder/login/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const userLogin = readFileSync(
+    new URL("../src/app/user/login/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(responderLogin, /role === "authority"/);
+  assert.doesNotMatch(responderLogin, /role === "trekker"/);
+  assert.match(userLogin, /role === "trekker"/);
+  assert.doesNotMatch(userLogin, /role === "authority"/);
 });
 
 test("trekker SOS confirmation is single-flight and updates active state", () => {
@@ -185,12 +230,12 @@ test("portal requests forward session cookies and do not expose admin keys", () 
   assert.doesNotMatch(api, /ADMIN_API_KEY|x-admin-api-key/);
 });
 
-test("authority pages distinguish empty collections from request failures", () => {
+test("responder pages distinguish empty collections from request failures", () => {
   const portal = readFileSync(
     new URL("../src/components/authority/authority-portal.tsx", import.meta.url),
     "utf8",
   );
-  assert.match(portal, /No active emergencies/);
+  assert.match(portal, /No active cases/);
   assert.match(portal, /No devices are registered yet/);
   assert.match(portal, /No notification attempts yet/);
   assert.match(portal, /ErrorState message=\{error\}/);

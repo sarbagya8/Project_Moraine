@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { StatusBadge, formatTime, relativeAge } from "@/components/shared/portal-ui";
+import { StatusBadge, displayDeviceId, formatTime, relativeAge } from "@/components/shared/portal-ui";
 import {
   ARGUS_SENSOR_STALE_MS,
   TrekkerBleBridge,
@@ -33,10 +33,12 @@ const connectionStageLabels: Record<BleConnectionStage, string> = {
 
 export function DeviceConnectionPanel({
   deviceId,
+  displayName,
   locationStaleSeconds,
   onStoredData,
 }: {
   deviceId: string | null;
+  displayName?: string | null;
   locationStaleSeconds: number;
   onStoredData?: () => void;
 }) {
@@ -49,8 +51,8 @@ export function DeviceConnectionPanel({
     useState(false);
   const [message, setMessage] = useState(
     deviceId
-      ? "Ready to connect the assigned ARGUS wristband."
-      : "No wristband is assigned to this trekker.",
+      ? "Ready to connect the assigned ARGUS safety device."
+      : "No safety device is assigned to this trekker.",
   );
   const [reading, setReading] = useState<BleReading | null>(null);
   const [readingReceivedAt, setReadingReceivedAt] = useState<number | null>(null);
@@ -144,34 +146,39 @@ export function DeviceConnectionPanel({
     <section className="panel device-connection-panel" aria-labelledby="device-connection-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Wristband connection</p>
-          <h2 id="device-connection-title">ARGUS BLE sensor</h2>
+          <p className="eyebrow">Expedition safety device</p>
+          <h2 id="device-connection-title">Connect device</h2>
         </div>
         <StatusBadge value={status.replaceAll("_", " ")} tone={tone} />
       </div>
 
       <p className="muted">
         {deviceId
-          ? `Assigned device: ${deviceId}`
-          : "Ask the authority team to assign a device first."}
+          ? `Assigned safety device: ${displayName || displayDeviceId(deviceId)}`
+          : "Ask the response team to assign a safety device first."}
       </p>
       <dl className="compact-details">
-        <div><dt>Browser support</dt><dd>{status === "unsupported_browser" ? "Unsupported" : "Web Bluetooth available"}</dd></div>
-        <div><dt>Secure context</dt><dd>{typeof window !== "undefined" && window.isSecureContext ? "HTTPS / localhost" : "HTTPS required"}</dd></div>
-        <div><dt>Connection stage</dt><dd>{connectionStageLabels[connectionStage]}</dd></div>
-        <div><dt>Device name</dt><dd>{identity?.deviceName ?? "Unavailable"}</dd></div>
-        <div><dt>Verified device ID</dt><dd>{identity?.deviceId ?? "Not connected"}</dd></div>
-        <div><dt>Firmware</dt><dd>{identity?.firmwareVersion ?? "Unavailable"}</dd></div>
-        <div><dt>Identity source</dt><dd>{identity ? (identity.identitySource === "firmware" ? "ESP32 firmware" : "Assigned device record") : "Unavailable"}</dd></div>
+        <div><dt>Connection</dt><dd>{connectionStageLabels[connectionStage]}</dd></div>
         <div><dt>Sensor state</dt><dd><StatusBadge value={sensorDisplayState.replaceAll("_", " ")} tone={sensorDisplayState === "valid" ? "green" : sensorDisplayState === "sensor_error" ? "red" : undefined} /></dd></div>
-        <div><dt>Last live reading</dt><dd>{readingReceivedAt ? relativeAge(new Date(readingReceivedAt).toISOString()) : "Unavailable"}</dd></div>
-        <div><dt>Last packet timestamp</dt><dd>{reading?.capturedAt ? formatTime(reading.capturedAt) : "No reading yet"}</dd></div>
-        <div><dt>Database sync</dt><dd>{syncState}</dd></div>
-        {syncError ? <div><dt>Sync detail</dt><dd>{syncError}</dd></div> : null}
+        <div><dt>Last packet</dt><dd>{reading?.capturedAt ? formatTime(reading.capturedAt) : "No reading yet"}</dd></div>
+        <div><dt>Database sync</dt><dd><StatusBadge value={syncState} /></dd></div>
         <div><dt>Phone GPS</dt><dd><StatusBadge value={gpsDisplayStatus.replaceAll("_", " ")} tone={gpsDisplayStatus === "available" ? "green" : gpsDisplayStatus === "denied" ? "red" : undefined} /></dd></div>
-        <div><dt>GPS fix</dt><dd>{gpsDetail}</dd></div>
-        <div><dt>GPS captured</dt><dd>{gps.capturedAt ? relativeAge(gps.capturedAt) : "Unavailable"}</dd></div>
       </dl>
+      <details className="technical-details">
+        <summary>Technical details</summary>
+        <dl className="compact-details">
+          <div><dt>Browser support</dt><dd>{status === "unsupported_browser" ? "Unsupported" : "Web Bluetooth available"}</dd></div>
+          <div><dt>Secure context</dt><dd>{typeof window !== "undefined" && window.isSecureContext ? "HTTPS / localhost" : "HTTPS required"}</dd></div>
+          <div><dt>Device name</dt><dd>{identity?.deviceName ?? "Unavailable"}</dd></div>
+          <div><dt>Verified device</dt><dd>{identity?.deviceId ? displayDeviceId(identity.deviceId) : "Not connected"}</dd></div>
+          <div><dt>Firmware</dt><dd>{identity?.firmwareVersion ?? "Unavailable"}</dd></div>
+          <div><dt>Identity source</dt><dd>{identity ? (identity.identitySource === "firmware" ? "ESP32 firmware" : "Assigned device record") : "Unavailable"}</dd></div>
+          <div><dt>Last live reading</dt><dd>{readingReceivedAt ? relativeAge(new Date(readingReceivedAt).toISOString()) : "Unavailable"}</dd></div>
+          <div><dt>GPS fix</dt><dd>{gpsDetail}</dd></div>
+          <div><dt>GPS captured</dt><dd>{gps.capturedAt ? relativeAge(gps.capturedAt) : "Unavailable"}</dd></div>
+          {syncError ? <div><dt>Sync error</dt><dd>{syncError}</dd></div> : null}
+        </dl>
+      </details>
 
       <p className="form-message" aria-live="polite">{message}</p>
       {reading ? (
@@ -212,7 +219,7 @@ export function DeviceConnectionPanel({
           <button className="secondary-button" type="button" onClick={disconnect}>Disconnect</button>
         ) : (
           <button className="primary-button" type="button" disabled={!deviceId || status === "connecting"} onClick={() => void connect()}>
-            {status === "connecting" ? "Connecting…" : status === "disconnected" ? "Reconnect ARGUS device" : "Connect ARGUS device"}
+            {status === "connecting" ? "Connecting…" : status === "disconnected" ? "Reconnect safety device" : "Connect safety device"}
           </button>
         )}
         {!connected && diagnosticFallbackAvailable ? (

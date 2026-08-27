@@ -7,6 +7,7 @@ import { databaseError, zodDetails, zodMessage } from "@/lib/api-route-support";
 import { withRequestContext } from "@/lib/request-context";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { rescueListQuerySchema } from "@/lib/validation/query-schema";
+import { visibleCaseStatus } from "@/lib/portal-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,7 +75,7 @@ export const GET = withRequestContext(
         let query = db
           .from("sos_events")
           .select("id, trekker_id, device_id, hardware_event_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, sensor_state, reading_captured_at, reading_is_stale, symptom, map_url, rescue_url, created_at");
-        if (input.data.status) query = query.eq("status", input.data.status);
+        if (input.data.status) query = input.data.status === "new" ? query.in("status", ["active", "new"]) : query.eq("status", input.data.status);
         return query
           .order("created_at", { ascending: false })
           .limit(input.data.limit)
@@ -84,7 +85,7 @@ export const GET = withRequestContext(
         let query = db
           .from("sos_events")
           .select("id, trekker_id, source, status, sms_status, severity_score, severity_label, severity_data_status, latitude, longitude, location_accuracy, location_captured_at, location_is_stale, heart_rate, spo2, altitude, temperature, reading_captured_at, reading_is_stale, symptom, map_url, rescue_url, created_at");
-        if (input.data.status) query = query.eq("status", input.data.status);
+        if (input.data.status) query = input.data.status === "new" ? query.in("status", ["active", "new"]) : query.eq("status", input.data.status);
         return query
           .order("created_at", { ascending: false })
           .limit(input.data.limit)
@@ -138,7 +139,7 @@ export const GET = withRequestContext(
           return {
             id: event.id,
             trekkerId: event.trekker_id,
-            trekkerName: trekker?.name || "Unknown trekker",
+            trekkerName: trekker?.name || "Unknown user",
             route: trekker?.route_name || null,
             severityScore: event.severity_score,
             severityLabel: event.severity_label,
@@ -146,7 +147,7 @@ export const GET = withRequestContext(
             source: event.source,
             deviceId: event.device_id,
             hardwareEventId: event.hardware_event_id,
-            status: event.status,
+            status: visibleCaseStatus(event.status),
             notificationStatus: event.sms_status,
             symptom: event.symptom,
             latitude: event.latitude,

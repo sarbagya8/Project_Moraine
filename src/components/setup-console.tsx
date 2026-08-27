@@ -120,11 +120,11 @@ export function SetupConsole() {
             : "Configure server-side device authentication",
         },
         {
-          label: "Authority authentication",
+          label: "Responder authentication",
           ready: health.adminAuthConfigured,
           detail: health.adminAuthConfigured
             ? "Operator actions are protected"
-            : "Configure server-side authority authentication",
+            : "Configure server-side responder authentication",
         },
         {
           label: health.demoMode ? "WhatsApp simulation" : "WhatsApp Cloud API",
@@ -204,8 +204,8 @@ export function SetupConsole() {
           >
             {testing ? "Testing..." : "Send fixed-recipient test"}
           </button>
-          <Link href="/authority/login" className="text-link">
-            Authority sign-in is required
+          <Link href="/responder/login" className="text-link">
+            Responder sign-in is required
           </Link>
         </div>
         {testError ? (

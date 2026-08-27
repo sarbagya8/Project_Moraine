@@ -83,7 +83,7 @@ export default function SafetyMap({
   if (!safePoints.length) {
     return (
       <div className="map-unavailable" style={{ minHeight: height }}>
-        <strong>Location data is unavailable</strong>
+        <strong>No location shared yet</strong>
         <p>The map will appear after ARGUS receives a valid GPS location.</p>
       </div>
     );

@@ -1,23 +1,22 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import "./landing.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   ),
   title: {
-    default: "ARGUS | Connected Trekking Safety",
+    default: "ARGUS | Trekker Safety & Emergency Response",
     template: "%s | ARGUS",
   },
   description:
-    "ARGUS is a hardware-and-software trekking safety prototype that combines wearable readings, location, SOS tracking, a rescue dashboard, and WhatsApp emergency alerts.",
+    "ARGUS connects trekkers, safety devices, phone location, and responders when an expedition needs support.",
   applicationName: "ARGUS",
   manifest: "/manifest.webmanifest",
   openGraph: {
-    title: "ARGUS | Connected Trekking Safety",
+    title: "ARGUS | Trekker Safety & Emergency Response",
     description:
-      "A trekking safety prototype combining wearable readings, location, SOS tracking, a rescue dashboard, and WhatsApp emergency alerts.",
+      "A trekker safety platform for available device telemetry, location, SOS, and responder coordination.",
     type: "website",
     siteName: "ARGUS",
     images: [
@@ -25,15 +24,15 @@ export const metadata: Metadata = {
         url: "/og.png",
         width: 1200,
         height: 630,
-        alt: "ARGUS connected trekking safety wristband and rescue platform",
+        alt: "ARGUS trekker safety and emergency response platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ARGUS | Connected Trekking Safety",
+    title: "ARGUS | Trekker Safety & Emergency Response",
     description:
-      "A trekking safety prototype connecting wearable readings, location, SOS tracking, and rescue tools.",
+      "A trekker safety platform connecting expedition signals, SOS, location, and responders.",
     images: ["/og.png"],
   },
   icons: { icon: "/favicon.ico" },
@@ -43,7 +42,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#123e30",
+  themeColor: "#1a3b2b",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

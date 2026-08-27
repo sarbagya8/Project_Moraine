@@ -7,7 +7,7 @@ import {
 } from "@/lib/portal-auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { withRequestContext } from "@/lib/request-context";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { getSupabaseAuthClient, getSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -26,24 +26,49 @@ export const POST = withRequestContext(
   if (!limit.allowed) {
     return failure(
       "RATE_LIMITED",
-      `Too many pairing attempts. Try again in ${limit.retryAfter} seconds.`,
+      `Too many sign-in attempts. Try again in ${limit.retryAfter} seconds.`,
       429,
     );
   }
   if (env.sessionSecret.length < 32) {
-    return failure("AUTH_NOT_CONFIGURED", "Trekker login is not configured.", 503);
+    return failure("AUTH_NOT_CONFIGURED", "User login is not configured.", 503);
   }
   const parsed = await readJson(request);
   if (parsed.error) return parsed.error;
   const body = parsed.data as Record<string, unknown>;
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const password = typeof body?.password === "string" ? body.password : "";
   const trekkerId =
     typeof body?.trekkerId === "string" ? body.trekkerId.trim() : "";
   const pairingCode =
     typeof body?.pairingCode === "string" ? body.pairingCode.trim() : "";
+  if ("email" in body || "password" in body) {
+    if (!email || !password) return failure("VALIDATION_ERROR", "Email and password are required.", 400);
+    try {
+      const { data: auth, error: authError } = await getSupabaseAuthClient().auth.signInWithPassword({ email, password });
+      if (authError || !auth.user) return failure("INVALID_CREDENTIALS", "Email or password is incorrect.", 401);
+      const { data: profile, error: profileError } = await getSupabaseServer()
+        .from("trekkers")
+        .select("id,is_active,role")
+        .eq("auth_user_id", auth.user.id)
+        .maybeSingle<{ id: string; is_active: boolean; role: string }>();
+      if (profileError) throw profileError;
+      if (!profile?.is_active || profile.role !== "user") {
+        return failure("ACCOUNT_UNAVAILABLE", "This User account is inactive or unavailable.", 403);
+      }
+      return signedIn(profile.id);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (["42703", "PGRST204"].includes(code || "")) {
+        return failure("ACCOUNT_SCHEMA_REQUIRED", "Email accounts are not enabled yet. Apply the account migration or use legacy pairing login.", 503);
+      }
+      return failure("AUTH_UNAVAILABLE", "User login is temporarily unavailable.", 503);
+    }
+  }
   if (!trekkerId || !pairingCode) {
     return failure(
       "VALIDATION_ERROR",
-      "Trekker ID and pairing code are required.",
+      "User ID and pairing code are required.",
       400,
     );
   }
@@ -63,7 +88,7 @@ export const POST = withRequestContext(
     ) {
       return failure(
         "INVALID_PAIRING",
-        "The trekker ID or pairing code is incorrect.",
+        "The user ID or pairing code is incorrect.",
         401,
       );
     }
@@ -79,7 +104,7 @@ export const POST = withRequestContext(
     }
     return failure(
       "DATABASE_ERROR",
-      "Trekker login is temporarily unavailable.",
+      "User login is temporarily unavailable.",
       503,
     );
   }

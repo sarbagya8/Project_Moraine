@@ -25,6 +25,12 @@ export const PATCH = withRequestContext<RouteContext>(
         : null;
   }
   if (typeof body?.isActive === "boolean") update.is_active = body.isActive;
+  if ("displayName" in body) {
+    if (body.displayName !== null && typeof body.displayName !== "string") return failure("VALIDATION_ERROR", "Display name must be text.", 400);
+    const displayName = typeof body.displayName === "string" ? body.displayName.trim() : "";
+    if (displayName.length > 120) return failure("VALIDATION_ERROR", "Display name must be 120 characters or fewer.", 400);
+    update.display_name = displayName || null;
+  }
   let pairingCode: string | undefined;
   if (regeneratePairingCode) {
     pairingCode = createPairingCode();
@@ -34,7 +40,13 @@ export const PATCH = withRequestContext<RouteContext>(
     return failure("VALIDATION_ERROR", "No supported device changes were provided.", 400);
   }
   try {
-    const { data, error } = await getSupabaseServer()
+    const db = getSupabaseServer();
+    if (typeof update.trekker_id === "string") {
+      const { data: user, error: userError } = await db.from("trekkers").select("id").eq("id", update.trekker_id).eq("is_active", true).maybeSingle<{ id: string }>();
+      if (userError) throw userError;
+      if (!user) return failure("USER_NOT_FOUND", "Select an active User account.", 404);
+    }
+    const { data, error } = await db
       .from("devices")
       .update(update)
       .eq("id", id)
@@ -58,6 +70,7 @@ export const PATCH = withRequestContext<RouteContext>(
         : {}),
     });
   } catch (error) {
+    if ((error as { code?: string })?.code === "23505") return failure("USER_ALREADY_ASSIGNED", "That User already has an assigned wearable. Unassign it before reassigning this device.", 409);
     return databaseError(error, context, { name: "update device", table: "devices" });
   }
   },

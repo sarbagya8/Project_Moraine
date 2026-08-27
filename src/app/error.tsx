@@ -2,8 +2,8 @@
 
 export default function ErrorPage({ reset }: { error: Error; reset: () => void }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16">
-      <p className="font-black tracking-widest text-red-700">ARGUS ERROR</p>
+    <main className="error-shell mx-auto flex min-h-screen max-w-xl flex-col justify-center px-6 py-16">
+      <p className="font-black tracking-widest text-red-700">ARGUS SYSTEM ERROR</p>
       <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">
         Something went wrong.
       </h1>

@@ -6,12 +6,13 @@ import { useState, type ReactNode } from "react";
 import { portalRequest } from "@/lib/portal-api";
 
 const links = [
-  ["Overview", "/authority/dashboard"],
-  ["Active Emergencies", "/authority/emergencies"],
-  ["Trekkers", "/authority/trekkers"],
-  ["Devices", "/authority/devices"],
-  ["Notifications", "/authority/notifications"],
-  ["Settings", "/authority/settings"],
+  ["Command center", "/responder/dashboard"],
+  ["Active cases", "/responder/cases"],
+  ["Trekkers", "/responder/users"],
+  ["Safety devices", "/responder/devices"],
+  ["Alert delivery", "/responder/notifications"],
+  ["Case history", "/responder/case-history"],
+  ["Settings", "/responder/settings"],
 ] as const;
 
 export function AuthorityShell({ children }: { children: ReactNode }) {
@@ -21,29 +22,29 @@ export function AuthorityShell({ children }: { children: ReactNode }) {
 
   async function logout() {
     await portalRequest("/api/auth/logout", { method: "POST" });
-    router.replace("/authority/login");
+    router.replace("/responder/login");
     router.refresh();
   }
 
   return (
     <div className="portal-layout">
       <header className="mobile-header">
-        <Link href="/authority/dashboard" className="brand">ARGUS</Link>
+        <Link href="/responder/dashboard" className="brand">ARGUS</Link>
         <button
           type="button"
           aria-expanded={open}
-          aria-controls="authority-navigation"
+          aria-controls="responder-navigation"
           onClick={() => setOpen((value) => !value)}
         >
           Menu
         </button>
       </header>
-      <aside id="authority-navigation" className={open ? "portal-sidebar is-open" : "portal-sidebar"}>
+      <aside id="responder-navigation" className={open ? "portal-sidebar is-open" : "portal-sidebar"}>
         <div>
-          <Link href="/authority/dashboard" className="brand">ARGUS</Link>
-          <p className="sidebar-caption">Authority / Rescue</p>
+          <Link href="/responder/dashboard" className="brand">ARGUS</Link>
+          <p className="sidebar-caption">Responder command center</p>
         </div>
-        <nav aria-label="Authority navigation">
+        <nav aria-label="Responder navigation">
           {links.map(([label, href]) => (
             <Link
               key={href}

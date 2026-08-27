@@ -36,7 +36,7 @@ test("active SOS demo is explicit and remains simulated", () => {
   });
 
   assert.equal(data.activeSos.id, DEMO_IDS.activeSos);
-  assert.equal(data.activeSos.status, "active");
+  assert.equal(data.activeSos.status, "new");
   assert.equal(data.activeAttempt.status, "simulated");
   assert.equal(data.activeAttempt.provider, "demo");
 });

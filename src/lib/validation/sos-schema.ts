@@ -26,6 +26,7 @@ export const sosSchema = z
 
 export const updateSosStatusSchema = z
   .object({
-    status: z.enum(["active", "acknowledged", "resolved"]),
+    status: z.enum(["new", "acknowledged", "in_progress", "resolved", "cancelled"]),
+    note: z.string().trim().max(1000).optional(),
   })
   .strict();

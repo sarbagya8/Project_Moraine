@@ -44,7 +44,7 @@ export const POST = withRequestContext(
       });
       return failure(
         "AUTH_CONFIGURATION_ERROR",
-        "Authority login could not be completed.",
+        "Responder login could not be completed.",
         500,
       );
     }

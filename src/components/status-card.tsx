@@ -8,11 +8,11 @@ type StatusCardProps = {
 };
 
 const toneClasses = {
-  slate: "border-slate-200 bg-white",
-  red: "border-red-200 bg-red-50",
-  amber: "border-amber-200 bg-amber-50",
-  green: "border-emerald-200 bg-emerald-50",
-  blue: "border-sky-200 bg-sky-50",
+  slate: "rescue-status-neutral",
+  red: "rescue-status-emergency",
+  amber: "rescue-status-warning",
+  green: "rescue-status-ready",
+  blue: "rescue-status-signal",
 } as const;
 
 export function StatusCard({
